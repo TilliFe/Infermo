@@ -184,44 +184,54 @@ struct Node:
     @always_inline
     fn printData(self):
         let num_dims = self.getNum_dims()
+        let row: Int = self.getShape(num_dims-2)
         let cols: Int = self.getShape(num_dims-1)
         let col_skips: Int = (self.getSkips(0) * self.getShape(0)) // cols
         print_no_newline("<Tensor: ")
         for i in range(col_skips):
-
-            if(i > 0):
-                print_no_newline("           ")
+            if(col_skips > 6 and i > 2 and i < col_skips - 3):
+                if(i == 3):
+                    print("                          ................ ")
+                continue
             else:
-                print_no_newline("[ ")
-
-            var indent = 0
-            for d in range(num_dims-1):
-                if(cols * i % self.getSkips(d) == 0):
-                    print_no_newline("[ ")
-                    indent += 1
+                if(i > 0):
+                    print_no_newline("           ")
                 else:
-                    print_no_newline("  ")
+                    print_no_newline("[ ")
 
-            for j in range(cols):
-                let idx = cols * i + j
-                print_no_newline(self.loadData(idx))
-                if(j != cols-1):
-                    print_no_newline(', ')
+                var indent = 0
+                for d in range(num_dims-1):
+                    if(cols * i % self.getSkips(d) == 0):
+                        print_no_newline("[ ")
+                        indent += 1
+                    else:
+                        print_no_newline("  ")
 
-            for d in range(num_dims-2,-1,-1):
-                if(cols * (i + 1) % self.getSkips(d) == 0):
-                    print_no_newline(" ]")
+                for j in range(cols):
+                    if(cols > 10 and j >= 3 and j < cols-3):
+                        if(j == 3):
+                            print_no_newline("... , ")
+                        continue
+                    else:
+                        let idx = cols * i + j
+                        print_no_newline(self.loadData(idx))
+                        if(j != cols-1):
+                            print_no_newline(', ')
 
-            if(i < col_skips-1):
-                print_no_newline(", ")
-                put_new_line()
-            else:
-                print_no_newline(" ], shape: [")
-                for i in range(num_dims):
-                    print_no_newline(self.getShape(i))
-                    if(i < num_dims-1):
-                        print_no_newline(",")                        
-                print_no_newline("], Data>\n\n")  
+                for d in range(num_dims-2,-1,-1):
+                    if(cols * (i + 1) % self.getSkips(d) == 0):
+                        print_no_newline(" ]")
+
+                if(i < col_skips-1):
+                    print_no_newline(", ")
+                    put_new_line()
+                else:
+                    print_no_newline(" ], shape: [")
+                    for i in range(num_dims):
+                        print_no_newline(self.getShape(i))
+                        if(i < num_dims-1):
+                            print_no_newline(",")                        
+                    print_no_newline("], Data>\n\n")  
 
     @always_inline
     fn setGradientAll(self, val: Float32):
@@ -254,40 +264,49 @@ struct Node:
         let col_skips: Int = (self.getSkips(0) * self.getShape(0)) // cols
         print_no_newline("<Tensor: ")
         for i in range(col_skips):
-
-            if(i > 0):
-                print_no_newline("           ")
+            if(col_skips > 6 and i > 2 and i < col_skips - 3):
+                if(i == 3):
+                    print("                         ................ ")
+                continue
             else:
-                print_no_newline("[ ")
-
-            var indent = 0
-            for d in range(num_dims-1):
-                if(cols * i % self.getSkips(d) == 0):
-                    print_no_newline("[ ")
-                    indent += 1
+                if(i > 0):
+                    print_no_newline("           ")
                 else:
-                    print_no_newline("  ")
+                    print_no_newline("[ ")
 
-            for j in range(cols):
-                let idx = cols * i + j
-                print_no_newline(self.getGradient(idx))
-                if(j != cols-1):
-                    print_no_newline(', ')
+                var indent = 0
+                for d in range(num_dims-1):
+                    if(cols * i % self.getSkips(d) == 0):
+                        print_no_newline("[ ")
+                        indent += 1
+                    else:
+                        print_no_newline("  ")
 
-            for d in range(num_dims-2,-1,-1):
-                if(cols * (i + 1) % self.getSkips(d) == 0):
-                    print_no_newline(" ]")
+                for j in range(cols):
+                    if(cols > 10 and j >= 3 and j < cols-3):
+                        if(j == 3):
+                            print_no_newline("... , ")
+                        continue
+                    else:
+                        let idx = cols * i + j
+                        print_no_newline(self.getGradient(idx))
+                        if(j != cols-1):
+                            print_no_newline(', ')
 
-            if(i < col_skips-1):
-                print_no_newline(", ")
-                put_new_line()
-            else:
-                print_no_newline(" ], shape: [")
-                for i in range(num_dims):
-                    print_no_newline(self.getShape(i))
-                    if(i < num_dims-1):
-                        print_no_newline(",")                        
-                print_no_newline("], Gradient>\n\n")  
+                for d in range(num_dims-2,-1,-1):
+                    if(cols * (i + 1) % self.getSkips(d) == 0):
+                        print_no_newline(" ]")
+
+                if(i < col_skips-1):
+                    print_no_newline(", ")
+                    put_new_line()
+                else:
+                    print_no_newline(" ], shape: [")
+                    for i in range(num_dims):
+                        print_no_newline(self.getShape(i))
+                        if(i < num_dims-1):
+                            print_no_newline(",")                        
+                    print_no_newline("], Gradient>\n\n")  
 
     @always_inline
     fn getNum_parents(self) -> Int:
