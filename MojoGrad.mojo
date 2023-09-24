@@ -1,8 +1,9 @@
 from memory import memset_zero, memcpy
 from memory.unsafe import Pointer
 from node import Node
-from tensorOps import mul, add, ReLU
-from tensorOpsGradients import mul_grad, add_grad, ReLU_grad
+from tensorOps import mul, add, ReLU, reshape
+from tensorOpsGradients import mul_grad, add_grad, ReLU_grad, reshape_grad
+from vector import Vec
 
 struct nn:
     var nodes: DynamicVector[Pointer[Node]]
@@ -120,7 +121,7 @@ struct nn:
             print("Error (at add): number of dimensions are not equal")
         let num_dims = A.getNum_dims()
         if(A.getShape(num_dims-2) != B.getShape(num_dims-2) or A.getShape(num_dims-1) != B.getShape(num_dims-1)):
-            print("Error (at add): For Matrix ADdition, Matrices need to in the following shape: C[mxn] = A[mxn] * B[nxn]")
+            print("Error (at add): For Matrix ADdition, Matrices need to in the following shape: C[mxn] = A[mxn] + B[mxn]")
 
         # init result Node 
         var new_shape = DynamicVector[Int](0)
@@ -140,7 +141,7 @@ struct nn:
         A.addChild(C.getId())
         B.addChild(C.getId())
 
-        return C #ret
+        return C 
 
     @always_inline
     fn ReLU(inout self, inout A: Node) -> Node: 
@@ -158,6 +159,44 @@ struct nn:
         A.addChild(B.getId())
 
         return B
+
+    @always_inline
+    fn reshape(inout self, inout A: Node,dir: Int) -> Node: 
+        if(dir != -1):
+            print("Error (at reshape)!")
+        var new_shape = DynamicVector[Int](0)
+        new_shape.push_back(A.getShape(0))
+        new_shape.push_back(1)
+        for i in range(1, A.getNum_dims()):
+            new_shape[1] *= A.getShape(i)
+        var B = Node(new_shape)
+
+        if(not A.getInNodes()):
+            self.addNode(A)
+        self.addNode(B)
+        B.setName('reshape')
+
+        B.addParent(A.getId())
+        A.addChild(B.getId())
+
+        return B
+
+    @always_inline
+    fn reshape(inout self, inout A: Node, newShape: Vec) -> Node: 
+        var B = Node(newShape.get())
+
+        if(not A.getInNodes()):
+            self.addNode(A)
+        self.addNode(B)
+        B.setName('reshape')
+
+        B.addParent(A.getId())
+        A.addChild(B.getId())
+        if(A.getCap() != B.getCap()):
+            print("Error (at reshape): The Product of the dimensions in shapes must be the same!")
+
+        return B
+
 
     fn topOrder(inout self, inout node: Node):  
         if not node.getVisited():
@@ -188,7 +227,10 @@ struct nn:
                 add(curr,par1,par2)
             if(curr.name == 'ReLU'):
                 let par1 = self.nodes[curr.getParent(0)].load()
-                ReLU(curr,par1)     
+                ReLU(curr,par1)  
+            if(curr.name == 'reshape'):
+                let par1 = self.nodes[curr.getParent(0)].load()
+                reshape(curr,par1)     
 
     fn backwardOrder(inout self, node: Node):
         self.backwardTape.push_back(node.getId())
@@ -225,6 +267,9 @@ struct nn:
             if(curr.getName() == 'ReLU'):
                 var par1 = self.nodes[curr.getParent(0)].load()
                 ReLU_grad(curr,par1)
+            if(curr.getName() == 'reshape'):
+                var par1 = self.nodes[curr.getParent(0)].load()
+                reshape_grad(curr,par1)
 
     @always_inline
     fn printNodes(self): 

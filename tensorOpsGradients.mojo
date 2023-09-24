@@ -50,3 +50,6 @@ fn ReLU_grad(B: Node, inout A: Node):
         let val = A.getData(i)
         if val < 0:
             A.setGradient(i, 0)
+
+fn reshape_grad(B: Node, inout A: Node):
+    A.setGradient(B.getGradient())

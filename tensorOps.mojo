@@ -52,3 +52,6 @@ fn ReLU(inout B: Node, A: Node):
             B.setData(i,0)
         else:
             B.setData(i,val)
+
+fn reshape(inout B: Node, A: Node):
+    return

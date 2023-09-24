@@ -1,5 +1,6 @@
 from memory import memset_zero, memcpy
 from memory.unsafe import Pointer
+from vector import Vec
 
 @register_passable("trivial")
 struct Node:
@@ -182,6 +183,46 @@ struct Node:
         return self.data    
 
     @always_inline
+    fn setData(self, pos: DynamicVector[Int], val: Float32):
+        let len = len(pos)
+        var index = 0
+        for j in range(len):
+            index += self.skips[j] * pos[j]
+
+        self.data.store(index, val)
+
+    @always_inline
+    fn setData(self, _pos: Vec, val: Float32):
+        let pos = _pos.get()
+        let len = len(pos)
+        var index = 0
+        for j in range(len):
+            index += self.skips[j] * pos[j]
+
+        self.data.store(index, val)
+
+    @always_inline
+    fn getData(self, _pos: Vec) -> Float32:
+        let pos = _pos.get()
+        let len = len(pos)
+        var index = 0
+        for j in range(len):
+            index += self.skips[j] * pos[j]
+
+        return self.data.load(index)
+
+    @always_inline
+    fn getData(self, *_pos: Int) -> Float32:
+        let pos = VariadicList[Int](_pos)
+        let len = len(pos)
+        var index = 0
+        for j in range(len):
+            index += self.skips[j] * pos[j]
+
+        return self.data.load(index)
+
+
+    @always_inline
     fn printData(self):
         let num_dims = self.getNum_dims()
         let row: Int = self.getShape(num_dims-2)
@@ -191,7 +232,7 @@ struct Node:
         for i in range(col_skips):
             if(col_skips > 6 and i > 2 and i < col_skips - 3):
                 if(i == 3):
-                    print("                          ................ ")
+                    print("                 ... ")
                 continue
             else:
                 if(i > 0):
@@ -266,7 +307,7 @@ struct Node:
         for i in range(col_skips):
             if(col_skips > 6 and i > 2 and i < col_skips - 3):
                 if(i == 3):
-                    print("                         ................ ")
+                    print("                 ... ")
                 continue
             else:
                 if(i > 0):
