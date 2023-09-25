@@ -1,7 +1,7 @@
-from node import Node
+from Tensor import Tensor
 
 @always_inline
-fn mul_grad(C: Node, inout A: Node, inout B: Node):
+fn mul_grad(C: Tensor, inout A: Tensor, inout B: Tensor):
 
     let num_dims = A.getNum_dims()
     var A_matrix_size = A.shape[num_dims-2] * A.shape[num_dims-1]
@@ -28,7 +28,7 @@ fn mul_grad(C: Node, inout A: Node, inout B: Node):
                     let index_B = offset_B + l * N + l 
                     let index_C = offset_C + i * M + l  
                     let a = A.getGradient(index_A) + C.getGradient(index_C) * B.getData(index_B) 
-                    A.setGradient(index_A, a)  
+                    A.setGradient(index_A, a / N)  
 
         for i in range(K):
             for j in range(N):
@@ -37,19 +37,30 @@ fn mul_grad(C: Node, inout A: Node, inout B: Node):
                     let index_B = offset_B + i * N + j 
                     let index_C = offset_C + l * N + j 
                     let b = B.getGradient(index_B) + A.getData(index_A) * C.getGradient(index_C)  
-                    B.setGradient(index_B, b) 
+                    B.setGradient(index_B, b / N) 
 
 
-fn add_grad(C: Node, inout A: Node, inout B: Node):
+fn add_grad(C: Tensor, inout A: Tensor, inout B: Tensor):
     A.setGradient(C.getGradient())
     B.setGradient(C.getGradient())
 
-fn ReLU_grad(B: Node, inout A: Node):
+fn ReLU_grad(B: Tensor, inout A: Tensor):
     A.setGradient(B.getGradient())
     for i in range(A.getCap()):
         let val = A.getData(i)
         if val < 0:
             A.setGradient(i, 0)
 
-fn reshape_grad(B: Node, inout A: Node):
+fn MSE_grad(C: Tensor, inout A: Tensor, inout B: Tensor):
+    let num_dims = A.getNum_dims()
+    var matrix_size = A.getShape(num_dims-2) * A.getShape(num_dims-1)
+    if(num_dims >= 3):
+        matrix_size = A.getSkips(num_dims-3)
+
+    for index in range(A.getCap()):
+        let grad = (Float32(2) / matrix_size) * (A.getData(index) - B.getData(index))
+        A.setGradient(index, grad) 
+        B.setGradient(index, grad) 
+
+fn reshape_grad(B: Tensor, inout A: Tensor):
     A.setGradient(B.getGradient())

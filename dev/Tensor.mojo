@@ -1,4 +1,6 @@
-from memory import memset_zero
+from memory import memset_zero, memcpy
+from memory.unsafe import Pointer
+from random import rand
 
 struct Vec:
     var shape: DynamicVector[Int]
@@ -22,8 +24,9 @@ fn shape(*_shape: Int) -> DynamicVector[Int]:
     return shape
 
 
+
 @register_passable("trivial")
-struct Node:
+struct Tensor:
     var id: Int
     var num_dims: Int
     var cap: Int
@@ -33,10 +36,8 @@ struct Node:
     var gradient: DTypePointer[DType.float32]    
     var parents: Pointer[Int]
     var num_parents: Int
-    var children: Pointer[Int]
-    var num_children: Int
     var name: StringRef
-    var inNodes: Bool
+    var inTensors: Bool
     var visited: Bool
     var requiresGradient: Bool
 
@@ -62,18 +63,14 @@ struct Node:
         let gradient = DTypePointer[DType.float32].alloc(_cap)
         memset_zero(gradient, _cap)
     	
-        # lets say a node can have maximum of 64 parents and children
         let parents = Pointer[Int].alloc(64)
         memset_zero(parents, 64)
         let num_parents = 0 
-        let children = Pointer[Int].alloc(64)
-        memset_zero(children, 64)
-        let num_children = 0 
 
         let name = StringRef('none')
 
-        return Node{
-            id: 0,
+        return Tensor{
+            id: 1,
             name: name,
             num_dims: _num_dims,
             cap: _cap,
@@ -83,16 +80,25 @@ struct Node:
             gradient: gradient,
             parents: parents,
             num_parents: num_parents,
-            children: children,
-            num_children: num_children,
-            inNodes: False,
+            inTensors: False,
             visited: False,
             requiresGradient: True
         }
 
-    # fn setId(inout self, id: Int):
-    #     self.id = id
-
+    @always_inline
+    fn copyFrom(inout self, borrowed other: Tensor):
+        self.id = other.id
+        self.name = other.name
+        self.num_dims = other.num_dims
+        self.cap = other.cap
+        self.skips = other.skips
+        self.data = other.data
+        self.gradient = other.gradient
+        self.parents = other.parents
+        self.num_parents = other.num_parents
+        self.inTensors = other.inTensors
+        self.visited = other.visited
+        self.requiresGradient = other.requiresGradient
 
     @always_inline
     fn getId(self) -> Int:
@@ -163,12 +169,12 @@ struct Node:
         print_no_newline(" ]\n")
 
     @always_inline
-    fn setInNodes(inout self: Self, val: Bool):
-        self.inNodes = val
+    fn setInTensors(inout self: Self, val: Bool):
+        self.inTensors = val
 
     @always_inline
-    fn getInNodes(self) -> Bool:
-        return self.inNodes
+    fn getInTensors(self) -> Bool:
+        return self.inTensors
 
     @always_inline
     fn setVisited(inout self: Self, val: Bool):
@@ -197,6 +203,11 @@ struct Node:
     @always_inline
     fn setData(self, index: Int, val: Float32):
         self.data.store(index, val)
+
+    fn initRandom(self, min: Float32, max: Float32):
+        rand(self.data, self.cap)
+        for i in range(self.cap):
+            self.setData(i, self.getData(i) * (max - min) + min)
 
     @always_inline
     fn getData(self, index: Int) -> Float32:
@@ -385,7 +396,7 @@ struct Node:
     fn addParent(inout self, parentId: Int):
         let index = self.getNum_parents()
         self.parents.store(index, parentId)
-        self.num_parents = index + 1
+        self.num_parents += 1
 
     @always_inline
     fn getParent(self, index: Int) -> Int:
@@ -402,68 +413,9 @@ struct Node:
         print_no_newline(" ]\n")
 
     @always_inline
-    fn getNum_children(self) -> Int:
-        return self.num_children#.load(0)
-
-    @always_inline
-    fn addChild(inout self, childId: Int):
-        let index = self.getNum_children()
-        self.children.store(index, childId)
-        self.num_children = index + 1
-
-    @always_inline
-    fn getChild(self, index: Int) -> Int:
-        return self.children.load(index)
-
-    @always_inline
-    fn printChildren(self):
-        print_no_newline("[ ")
-        let len = self.getNum_children()
-        for i in range(len):
-            print_no_newline(self.children.load(i))
-            if (i < len-1):
-                print_no_newline(", ")
-        print_no_newline(" ]\n")
-
-    @always_inline
     fn setRequiresGradient(inout self, val: Bool):
         self.requiresGradient = val
 
     @always_inline
     fn getRequiresGradient(self) -> Bool:
         return self.requiresGradient
-
-
-
-struct nn:
-    var nodes: DynamicVector[Node]
-    var counter: Int
-    # var forwardTape: DynamicVector[Int]
-    # var forwardTapeGenerated: Bool
-    # var backwardTape: DynamicVector[Int]
-    # var backwardTapeGenerated: Bool
-
-    fn __init__(inout self):
-        self.nodes = DynamicVector[Node]()
-        self.counter = 0
-        # self.forwardTape = DynamicVector[Int]()
-        # self.forwardTapeGenerated = False
-        # self.backwardTape = DynamicVector[Int]()
-        # self.backwardTapeGenerated = False
-
-    fn addNode(inout self, inout node: Node):
-        node.setId(self.counter)
-        self.nodes.push_back(node)
-        self.counter += 1
-
-    fn printNodes(self):
-        for i in range(len(self.nodes)):
-            self.nodes[i].printData()
-
-fn main():
-    var nn = nn()
-
-    for id in range(30):
-        var node = Node(shape(id,5))
-        nn.addNode(node)
-    nn.printNodes()

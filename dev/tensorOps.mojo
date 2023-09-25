@@ -1,7 +1,7 @@
-from node import Node
+from Tensor import Tensor
 
 @always_inline
-fn mul(inout C: Node, A: Node, B: Node):
+fn mul(inout C: Tensor, A: Tensor, B: Tensor):
     let num_dims = A.getNum_dims()
     var A_matrix_size = A.shape[num_dims-2] * A.shape[num_dims-1]
     var B_matrix_size = B.shape[num_dims-2] * B.shape[num_dims-1]
@@ -29,7 +29,7 @@ fn mul(inout C: Node, A: Node, B: Node):
                     let c = C.getData(index_C) + A.getData(index_A) * B.getData(index_B)
                     C.setData(index_C, c)
 
-fn add(inout C: Node, A: Node, B: Node):
+fn add(inout C: Tensor, A: Tensor, B: Tensor):
     let num_dims = A.getNum_dims()
     var matrix_size = A.getShape(num_dims-2) * A.getShape(num_dims-1)
     if(num_dims >= 3):
@@ -45,7 +45,7 @@ fn add(inout C: Node, A: Node, B: Node):
                 let index = offset + i * N + j
                 C.setData(index, A.getData(index) + B.getData(index))
 
-fn ReLU(inout B: Node, A: Node):
+fn ReLU(inout B: Tensor, A: Tensor):
     for i in range(A.getCap()):
         let val = A.getData(i)
         if(val < 0):
@@ -53,5 +53,16 @@ fn ReLU(inout B: Node, A: Node):
         else:
             B.setData(i,val)
 
-fn reshape(inout B: Node, A: Node):
+fn MSE(inout C: Tensor, A: Tensor, B: Tensor):
+    let num_dims = A.getNum_dims()
+    var matrix_size = A.getShape(num_dims-2) * A.getShape(num_dims-1)
+    if(num_dims >= 3):
+        matrix_size = A.getSkips(num_dims-3)
+
+    for index in range(A.getCap()):
+        let error = (A.getData(index) - B.getData(index)) * (A.getData(index) - B.getData(index))
+        C.setData(0, C.getData(0) + error)
+    C.setData(0, C.getData(0) / matrix_size)
+
+fn reshape(inout B: Tensor, A: Tensor):
     return
