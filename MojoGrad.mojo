@@ -6,7 +6,7 @@ from tensorOpsGradients import mul_grad, add_grad, ReLU_grad, reshape_grad
 from vector import Vec
 
 struct nn:
-    var nodes: DynamicVector[Pointer[Node]]
+    var nodes: DynamicVector[Node]
     var counter: Int
     var forwardTape: DynamicVector[Int]
     var forwardTapeGenerated: Bool
@@ -14,11 +14,11 @@ struct nn:
     var backwardTapeGenerated: Bool
 
     fn __init__(inout self):
-        self.nodes = DynamicVector[Pointer[Node]](0)
+        self.nodes = DynamicVector[Node](0)
         self.counter = 0
-        self.forwardTape = DynamicVector[Int](0)
+        self.forwardTape = DynamicVector[Int]()
         self.forwardTapeGenerated = False
-        self.backwardTape = DynamicVector[Int](0)
+        self.backwardTape = DynamicVector[Int]()
         self.backwardTapeGenerated = False
 
     @always_inline
@@ -31,10 +31,10 @@ struct nn:
 
     @always_inline
     fn addNode(inout self, inout a: Node):
-        self.nodes.push_back(Pointer[Node].address_of(a))
         a.setId(self.counter)
         a.setInNodes(True)
         self.counter += 1
+        self.nodes.push_back(a)
 
     @always_inline
     fn tensor(inout self, *s: Int) -> Node:
@@ -44,16 +44,17 @@ struct nn:
         for i in range(len):
             shape.push_back(v[i])
 
-        let newNode = Node(shape)
+        var newNode = Node(shape)
+        # self.addNode(newNode)
 
         return newNode #Pointer[Node].address_of(newNode)
 
     @always_inline
     fn printNode(self, index: Int):
-        self.nodes[index].load().printData()
+        self.nodes[index].printData()
 
     @always_inline
-    fn getNode(inout self, index: Int) -> Pointer[Node]:
+    fn getNode(inout self, index: Int) -> Node:
         return self.nodes[index]
 
     @always_inline
@@ -98,20 +99,23 @@ struct nn:
             new_shape.push_back(A.shape[i])
         new_shape.push_back(B.shape[num_dims-1])
         var C = Node(new_shape)
-   
-        if(not A.getInNodes()):
-            self.addNode(A)
-        if(not B.getInNodes()):
-            self.addNode(B)
-        self.addNode(C)
+
         C.setName('mul')
 
-        C.addParent(A.getId())
-        C.addParent(B.getId())
-        A.addChild(C.getId())
-        B.addChild(C.getId())
+        if(not A.getInNodes()):
+            C.addParent(self.counter)
+            self.addNode(A)
+        else:
+            C.addParent(A.getId())
 
-        return C #ret
+        if(not B.getInNodes()):
+            C.addParent(self.counter)
+            self.addNode(B)
+        else:
+            C.addParent(B.getId())
+        self.addNode(C)
+
+        return C 
         
     @always_inline
     fn add(inout self, inout A: Node, inout B: Node) -> Node:
@@ -124,44 +128,49 @@ struct nn:
             print("Error (at add): For Matrix ADdition, Matrices need to in the following shape: C[mxn] = A[mxn] + B[mxn]")
 
         # init result Node 
-        var new_shape = DynamicVector[Int](0)
+        var new_shape = DynamicVector[Int]()
         for i in range(num_dims):
             new_shape.push_back(A.getShape(i))
         var C = Node(new_shape)
 
-        if(not A.getInNodes()):
-            self.addNode(A)
-        if(not B.getInNodes()):
-            self.addNode(B)
-        self.addNode(C)
         C.setName('add')
 
-        C.addParent(A.getId())
-        C.addParent(B.getId())
-        A.addChild(C.getId())
-        B.addChild(C.getId())
+        if(not A.getInNodes()):
+            C.addParent(self.counter)
+            self.addNode(A)
+        else:
+            C.addParent(A.getId())
+
+        if(not B.getInNodes()):
+            C.addParent(self.counter)
+            self.addNode(B)
+        else:
+            C.addParent(B.getId())
+        self.addNode(C)
 
         return C 
 
     @always_inline
     fn ReLU(inout self, inout A: Node) -> Node: 
-        var new_shape = DynamicVector[Int](0)
+        var new_shape = DynamicVector[Int]()
         for i in range(A.getNum_dims()):
             new_shape.push_back(A.getShape(i))
+
         var B = Node(new_shape)
 
-        if(not A.getInNodes()):
-            self.addNode(A)
-        self.addNode(B)
         B.setName('ReLU')
 
-        B.addParent(A.getId())
-        A.addChild(B.getId())
+        if(not A.getInNodes()):
+            B.addParent(self.counter)
+            self.addNode(A)
+        else:
+            B.addParent(A.getId())
+        self.addNode(B)
 
         return B
 
     @always_inline
-    fn reshape(inout self, inout A: Node,dir: Int) -> Node: 
+    fn reshape(inout self, inout A: Node, dir: Int) -> Node: 
         if(dir != -1):
             print("Error (at reshape)!")
         var new_shape = DynamicVector[Int](0)
@@ -171,27 +180,31 @@ struct nn:
             new_shape[1] *= A.getShape(i)
         var B = Node(new_shape)
 
-        if(not A.getInNodes()):
-            self.addNode(A)
-        self.addNode(B)
         B.setName('reshape')
 
-        B.addParent(A.getId())
-        A.addChild(B.getId())
+        if(not A.getInNodes()):
+            B.addParent(self.counter)
+            self.addNode(A)
+        else:
+            B.addParent(A.getId())
+        self.addNode(B)
 
         return B
 
     @always_inline
-    fn reshape(inout self, inout A: Node, newShape: Vec) -> Node: 
-        var B = Node(newShape.get())
+    fn reshape(inout self, inout A: Node, newShape: DynamicVector[Int]) -> Node: 
+        var B = Node(newShape)
+        B.setData(A.getData())
 
-        if(not A.getInNodes()):
-            self.addNode(A)
-        self.addNode(B)
         B.setName('reshape')
 
-        B.addParent(A.getId())
-        A.addChild(B.getId())
+        if(not A.getInNodes()):
+            B.addParent(self.counter)
+            self.addNode(A)
+        else:
+            B.addParent(A.getId())
+        self.addNode(B)
+
         if(A.getCap() != B.getCap()):
             print("Error (at reshape): The Product of the dimensions in shapes must be the same!")
 
@@ -202,7 +215,7 @@ struct nn:
         if not node.getVisited():
             for i in range(node.getNum_parents()):
                 let nextNodeId = node.getParent(i)
-                var nextNode = self.nodes[nextNodeId].load()
+                var nextNode = self.nodes[nextNodeId]
                 self.topOrder(nextNode)
             self.forwardTape.push_back(node.getId())
             node.setVisited(True)
@@ -211,36 +224,36 @@ struct nn:
     fn forward(inout self):
         let numNodes = self.getCounter()
         if(not self.forwardTapeGenerated):
-            var lastNode = self.nodes[self.getCounter()-1].load()
+            var lastNode = self.nodes[self.getCounter()-1]
             self.topOrder(lastNode)
             self.forwardTapeGenerated = True
 
-        for i in range(numNodes):
-            var curr = self.nodes[i].load()
-            if(curr.name == 'mul'):
-                let par1 = self.nodes[curr.getParent(0)].load()
-                let par2 = self.nodes[curr.getParent(1)].load()
+        for i in range(self.counter):
+            var curr = self.nodes[i]
+            if(curr.getName() == 'mul'):
+                let par1 = self.nodes[curr.getParent(0)]
+                let par2 = self.nodes[curr.getParent(1)]
                 mul(curr,par1,par2)
-            if(curr.name == 'add'):
-                let par1 = self.nodes[curr.getParent(0)].load()
-                let par2 = self.nodes[curr.getParent(1)].load()
+            if(curr.getName() == 'add'):
+                let par1 = self.nodes[curr.getParent(0)]
+                let par2 = self.nodes[curr.getParent(1)]
                 add(curr,par1,par2)
-            if(curr.name == 'ReLU'):
-                let par1 = self.nodes[curr.getParent(0)].load()
+            if(curr.getName() == 'ReLU'):
+                let par1 = self.nodes[curr.getParent(0)]
                 ReLU(curr,par1)  
-            if(curr.name == 'reshape'):
-                let par1 = self.nodes[curr.getParent(0)].load()
-                reshape(curr,par1)     
+            if(curr.getName() == 'reshape'):
+                let par1 = self.nodes[curr.getParent(0)]
+                reshape(curr,par1)
 
     fn backwardOrder(inout self, node: Node):
         self.backwardTape.push_back(node.getId())
         var it = 0
         while(it < len(self.backwardTape)):
             let currId = self.backwardTape[it]
-            let curr = self.nodes[currId].load()
+            let curr = self.nodes[currId]
             for i in range(curr.getNum_parents()):
                 let parId = curr.getParent(i)
-                let par = self.nodes[parId].load()
+                let par = self.nodes[parId]
                 if(par.getRequiresGradient()):
                     self.backwardTape.push_back(parId)
             it += 1
@@ -249,33 +262,33 @@ struct nn:
     fn backward(inout self):
         let numNodes = self.getCounter()
         if(not self.backwardTapeGenerated):
-            let lastNode = self.nodes[self.getCounter()-1].load()
+            let lastNode = self.nodes[self.getCounter()-1]
             self.backwardOrder(lastNode)
             self.backwardTapeGenerated = True
 
         for i in range(len(self.backwardTape)):
             let currId = self.backwardTape[i]
-            let curr = self.nodes[currId].load()
+            let curr = self.nodes[currId]
             if(curr.getName() == 'mul'):
-                var par1 = self.nodes[curr.getParent(0)].load()
-                var par2 = self.nodes[curr.getParent(1)].load()
+                var par1 = self.nodes[curr.getParent(0)]
+                var par2 = self.nodes[curr.getParent(1)]
                 mul_grad(curr,par1,par2)
             if(curr.getName() == 'add'):
-                var par1 = self.nodes[curr.getParent(0)].load()
-                var par2 = self.nodes[curr.getParent(1)].load()
+                var par1 = self.nodes[curr.getParent(0)]
+                var par2 = self.nodes[curr.getParent(1)]
                 add_grad(curr,par1,par2)
             if(curr.getName() == 'ReLU'):
-                var par1 = self.nodes[curr.getParent(0)].load()
+                var par1 = self.nodes[curr.getParent(0)]
                 ReLU_grad(curr,par1)
             if(curr.getName() == 'reshape'):
-                var par1 = self.nodes[curr.getParent(0)].load()
+                var par1 = self.nodes[curr.getParent(0)]
                 reshape_grad(curr,par1)
 
     @always_inline
     fn printNodes(self): 
         print("Printing all Nodes of the Computational Graph .....\n")
         for i in range(self.counter):
-            let n = self.nodes[i].load()
+            let n = self.nodes[i]
             print("Node ID: ", n.getId(), ", Name: ", n.getName())
             n.printData()
             n.printGradient()

@@ -2,70 +2,35 @@ from MojoGrad import nn
 from vector import Vec, shape
 from node import Node
 
-# @always_inline
-# fn MLP(inout nn: nn, inout x: Node) -> Node:
-#     var fw1 = nn.mul(self.A, x)
-#     return nn.ReLU(fw1)
-
-@always_inline
 fn MLP(inout nn: nn, inout x: Node) -> Node:
-    var W = Node(shape(10,4,4))
-    return nn.mul(W, x)
+    var W = Node(shape(1,4,4))
+    var B = Node(shape(1,4,4))
+    W.setDataAll(3)
+    B.setDataAll(-1)
+    var a = nn.mul(W, x)
+    var b = nn.add(a,B)
+    let c = nn.ReLU(b)
+    return c
 
-# struct model:
-#     var nn: nn
-#     var A: Node
+struct model:
+    var nn: nn
+    var input: Node
 
-#     @always_inline
-#     fn __init__(inout self):
-#         self.nn = nn()
-#         self.A = Node(shape(10,4,4))
-#         self.A.setDataAll(2)
+    fn __init__(inout self):
+        self.input = Node(shape(1,4,4))
+        self.input.setDataAll(2)
+        self.nn = nn()
 
-#     # @always_inline
-#     # fn init(inout self):
-#     #     var res = MLP(self.nn,res)
+        # model architecture
+        var B = MLP(self.nn,self.input)
+        for i in range(2):
+            B = MLP(self.nn,B)
 
 fn main():
 
-    var nn = nn()
+    var model = model()
 
-    var res = nn.tensor(10,4,4)
-    for i in range(2):
-        var x = Node(shape(10,4,4))
-        var res = nn.ReLU(x)
-
-    nn.forward()
-
-    nn.printNodes()
-
-    # var model = model()
-    # var x = Node(shape(10,4,4))
-    # model.init()
-    # for i in range(1):
-    #     # x.setDataAll(3)
-    #     model.nn.forward()
-    #     # logits.printData()
-    #     # model.nn.backward()
-    #     model.nn.printNodes()
-
-
-
-    # var nn = nn()
-    # var K = Node(shape(10,2,2,3))
-    # var A = nn.reshape(K,Vec(10,4,3))
-    # var x = Node(shape(10,3,4))
-    # var C = Node(shape(10,4,4))
-
-    # A.setDataAll(2)
-    # x.setDataAll(3)
-    # C.setData(4,-4)
-
-    # var D = nn.mul(A,x)
-    # var E = nn.add(C,D)
-    # var F = nn.ReLU(E)
-    
-    # for i in range(1):
-    #     nn.forward()
-    #     nn.backward()
-    # nn.printNodes()
+    for _ in range(1):
+        model.nn.forward()
+        model.nn.backward()
+        model.nn.printNodes()

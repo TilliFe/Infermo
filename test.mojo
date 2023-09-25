@@ -1,6 +1,26 @@
-from memory import memset_zero, memcpy
-from memory.unsafe import Pointer
-from vector import Vec
+from memory import memset_zero
+
+struct Vec:
+    var shape: DynamicVector[Int]
+
+    fn __init__(inout self, *_shape: Int):
+        let v = VariadicList[Int](_shape)
+        let len = len(v)
+        self.shape = DynamicVector[Int](0)
+        for i in range(len):
+            self.shape.push_back(v[i])
+
+    fn get(self) -> DynamicVector[Int]:
+        return self.shape
+
+fn shape(*_shape: Int) -> DynamicVector[Int]:
+    let v = VariadicList[Int](_shape)
+    let len = len(v)
+    var shape = DynamicVector[Int](0)
+    for i in range(len):
+        shape.push_back(v[i])
+    return shape
+
 
 @register_passable("trivial")
 struct Node:
@@ -13,8 +33,8 @@ struct Node:
     var gradient: DTypePointer[DType.float32]    
     var parents: Pointer[Int]
     var num_parents: Int
-    # var children: Pointer[Int]
-    # var num_children: Int
+    var children: Pointer[Int]
+    var num_children: Int
     var name: StringRef
     var inNodes: Bool
     var visited: Bool
@@ -46,14 +66,14 @@ struct Node:
         let parents = Pointer[Int].alloc(64)
         memset_zero(parents, 64)
         let num_parents = 0 
-        # let children = Pointer[Int].alloc(64)
-        # memset_zero(children, 64)
-        # let num_children = 0 
+        let children = Pointer[Int].alloc(64)
+        memset_zero(children, 64)
+        let num_children = 0 
 
         let name = StringRef('none')
 
         return Node{
-            id: 1,
+            id: 0,
             name: name,
             num_dims: _num_dims,
             cap: _cap,
@@ -63,29 +83,16 @@ struct Node:
             gradient: gradient,
             parents: parents,
             num_parents: num_parents,
-            # children: children,
-            # num_children: num_children,
+            children: children,
+            num_children: num_children,
             inNodes: False,
             visited: False,
             requiresGradient: True
         }
 
-    @always_inline
-    fn copyFrom(inout self, borrowed other: Node):
-        self.id = other.id
-        self.name = other.name
-        self.num_dims = other.num_dims
-        self.cap = other.cap
-        self.skips = other.skips
-        self.data = other.data
-        self.gradient = other.gradient
-        self.parents = other.parents
-        self.num_parents = other.num_parents
-        # self.children = other.children
-        # self.num_children = other.num_children
-        self.inNodes = other.inNodes
-        self.visited = other.visited
-        self.requiresGradient = other.requiresGradient
+    # fn setId(inout self, id: Int):
+    #     self.id = id
+
 
     @always_inline
     fn getId(self) -> Int:
@@ -378,7 +385,7 @@ struct Node:
     fn addParent(inout self, parentId: Int):
         let index = self.getNum_parents()
         self.parents.store(index, parentId)
-        self.num_parents += 1
+        self.num_parents = index + 1
 
     @always_inline
     fn getParent(self, index: Int) -> Int:
@@ -394,29 +401,29 @@ struct Node:
                 print_no_newline(", ")
         print_no_newline(" ]\n")
 
-    # @always_inline
-    # fn getNum_children(self) -> Int:
-    #     return self.num_children#.load(0)
+    @always_inline
+    fn getNum_children(self) -> Int:
+        return self.num_children#.load(0)
 
-    # @always_inline
-    # fn addChild(inout self, childId: Int):
-    #     let index = self.getNum_children()
-    #     self.children.store(index, childId)
-    #     self.num_children = index + 1
+    @always_inline
+    fn addChild(inout self, childId: Int):
+        let index = self.getNum_children()
+        self.children.store(index, childId)
+        self.num_children = index + 1
 
-    # @always_inline
-    # fn getChild(self, index: Int) -> Int:
-    #     return self.children.load(index)
+    @always_inline
+    fn getChild(self, index: Int) -> Int:
+        return self.children.load(index)
 
-    # @always_inline
-    # fn printChildren(self):
-    #     print_no_newline("[ ")
-    #     let len = self.getNum_children()
-    #     for i in range(len):
-    #         print_no_newline(self.children.load(i))
-    #         if (i < len-1):
-    #             print_no_newline(", ")
-    #     print_no_newline(" ]\n")
+    @always_inline
+    fn printChildren(self):
+        print_no_newline("[ ")
+        let len = self.getNum_children()
+        for i in range(len):
+            print_no_newline(self.children.load(i))
+            if (i < len-1):
+                print_no_newline(", ")
+        print_no_newline(" ]\n")
 
     @always_inline
     fn setRequiresGradient(inout self, val: Bool):
@@ -425,3 +432,38 @@ struct Node:
     @always_inline
     fn getRequiresGradient(self) -> Bool:
         return self.requiresGradient
+
+
+
+struct nn:
+    var nodes: DynamicVector[Node]
+    var counter: Int
+    # var forwardTape: DynamicVector[Int]
+    # var forwardTapeGenerated: Bool
+    # var backwardTape: DynamicVector[Int]
+    # var backwardTapeGenerated: Bool
+
+    fn __init__(inout self):
+        self.nodes = DynamicVector[Node]()
+        self.counter = 0
+        # self.forwardTape = DynamicVector[Int]()
+        # self.forwardTapeGenerated = False
+        # self.backwardTape = DynamicVector[Int]()
+        # self.backwardTapeGenerated = False
+
+    fn addNode(inout self, inout node: Node):
+        node.setId(self.counter)
+        self.nodes.push_back(node)
+        self.counter += 1
+
+    fn printNodes(self):
+        for i in range(len(self.nodes)):
+            self.nodes[i].printData()
+
+fn main():
+    var nn = nn()
+
+    for id in range(30):
+        var node = Node(shape(id,5))
+        nn.addNode(node)
+    nn.printNodes()
