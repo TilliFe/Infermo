@@ -2,6 +2,7 @@ from memory import memset_zero, memcpy
 from Tensor import Tensor, shape, Vec
 from tensorOps import mul, add, ReLU, MSE, reshape
 from tensorOpsGradients import mul_grad, add_grad, ReLU_grad, MSE_grad, reshape_grad
+from runtime.llcl import Runtime
 
 struct Module:
     var Tensors: DynamicVector[Tensor]
@@ -265,7 +266,8 @@ struct Module:
             if(curr.getName() == 'mul'):
                 let par1 = self.Tensors[curr.getParent(0)]
                 let par2 = self.Tensors[curr.getParent(1)]
-                mul(curr,par1,par2)
+                with Runtime() as rt:
+                    mul(curr,par1,par2,rt)
             if(curr.getName() == 'add'):
                 let par1 = self.Tensors[curr.getParent(0)]
                 let par2 = self.Tensors[curr.getParent(1)]
@@ -282,6 +284,7 @@ struct Module:
                 reshape(curr,par1)
 
     fn backwardOrder(inout self, Tensor: Tensor):
+        self.backwardTape = DynamicVector[Int](1)
         self.backwardTape.push_back(Tensor.getId())
         var it = 0
         while(it < len(self.backwardTape)):
@@ -298,7 +301,7 @@ struct Module:
     fn backward(inout self, inout lastTensor: Tensor):
         self.backwardOrder(lastTensor)
         for i in range(self.counter):
-            if(self.Tensors[i].requiresGradient):
+            if(self.Tensors[i].requiresGradient and self.Tensors[i].id != lastTensor.id):
                 self.Tensors[i].setGradientAll(0)
 
         for i in range(len(self.backwardTape)):

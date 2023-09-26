@@ -26,10 +26,10 @@ fn mul_grad(C: Tensor, inout A: Tensor, inout B: Tensor):
                 for l in range(N):
                     let index_A = offset_A + i * K + j 
                     let index_B = offset_B + l * N + l 
-                    let index_C = offset_C + i * M + l  
+                    let index_C = offset_C + i * N + l  
                     let a = A.getGradient(index_A) + C.getGradient(index_C) * B.getData(index_B) 
-                    A.setGradient(index_A, a / N)  
-
+                    A.setGradient(index_A, a / N )  
+        
         for i in range(K):
             for j in range(N):
                 for l in range(M):
@@ -58,7 +58,7 @@ fn MSE_grad(C: Tensor, inout A: Tensor, inout B: Tensor):
         matrix_size = A.getSkips(num_dims-3)
 
     for index in range(A.getCap()):
-        let grad = (Float32(2) / matrix_size) * (A.getData(index) - B.getData(index))
+        let grad = Float32(2) * (A.getData(index) - B.getData(index)) #/ matrix_size
         A.setGradient(index, grad) 
         B.setGradient(index, grad) 
 

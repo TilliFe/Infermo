@@ -1,7 +1,11 @@
 from Tensor import Tensor
+from runtime.llcl import Runtime
+from algorithm import vectorize, parallelize
+
+alias nelts = simdwidthof[DType.float32]()
 
 @always_inline
-fn mul(inout C: Tensor, A: Tensor, B: Tensor):
+fn mul(inout C: Tensor, A: Tensor, B: Tensor, rt: Runtime):
     let num_dims = A.getNum_dims()
     var A_matrix_size = A.shape[num_dims-2] * A.shape[num_dims-1]
     var B_matrix_size = B.shape[num_dims-2] * B.shape[num_dims-1]
@@ -20,14 +24,14 @@ fn mul(inout C: Tensor, A: Tensor, B: Tensor):
         let offset_B = s * B_matrix_size
         let offset_C = s * C_matrix_size
 
-        for i in range(M):
-            for j in range(N):
-                for l in range(K):
-                    let index_A = offset_A + i * K + l
-                    let index_B = offset_B + l * N + j
-                    let index_C = offset_C + i * N + j
-                    let c = C.getData(index_C) + A.getData(index_A) * B.getData(index_B)
-                    C.setData(index_C, c)
+        @parameter
+        fn calc_row(m: Int):
+            for k in range(K):
+                @parameter
+                fn dot[nelts: Int](n: Int):
+                    C.data.simd_store[nelts](offset_C + m*N+n, C.data.simd_load[nelts](offset_C + m*N+n) + A.data.load(offset_A + m*K+k) * B.data.simd_load[nelts](offset_B + k*N+n))
+                vectorize[nelts, dot](N)
+        parallelize[calc_row](rt, M)
 
 fn add(inout C: Tensor, A: Tensor, B: Tensor):
     let num_dims = A.getNum_dims()
@@ -38,12 +42,16 @@ fn add(inout C: Tensor, A: Tensor, B: Tensor):
     let M = A.getShape(num_dims-2)
     let N = A.getShape(num_dims-1)
 
-    for s in range(C.getCap() // matrix_size):
-        let offset = s * matrix_size
-        for i in range(M):
-            for j in range(N):
-                let index = offset + i * N + j
-                C.setData(index, A.getData(index) + B.getData(index))
+    if(C.getCap() > nelts):
+        for i in range(0,C.getCap() - (nelts), nelts):
+            print(i)
+            C.data.simd_store[nelts](i, A.data.simd_load[nelts](i) + B.data.simd_load[nelts](i))
+        for i in range(C.getCap() - nelts, C.getCap()):
+            C.data.store(i, A.data.load(i) + B.data.load(i))
+    else:
+        for i in range(C.getCap()):
+            C.data.store(i, A.data.load(i) + B.data.load(i))
+
 
 fn ReLU(inout B: Tensor, A: Tensor):
     for i in range(A.getCap()):
