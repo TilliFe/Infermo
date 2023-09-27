@@ -313,9 +313,10 @@ struct Module:
                     var par2 = self.Tensors[curr.getParent(1)]
                     mul_grad_last(curr,par1,par2)
             if(curr.getName() == 'add'):
-                var par1 = self.Tensors[curr.getParent(0)]
-                var par2 = self.Tensors[curr.getParent(1)]
-                add_grad(curr,par1,par2)
+                if(currId != lastTensor.id):
+                    var par1 = self.Tensors[curr.getParent(0)]
+                    var par2 = self.Tensors[curr.getParent(1)]
+                    add_grad(curr,par1,par2)
             if(curr.getName() == 'ReLU'):
                 var par1 = self.Tensors[curr.getParent(0)]
                 ReLU_grad(curr,par1)
@@ -338,7 +339,6 @@ struct Module:
         if(optType == "sgd_momentum"):
             for i in range(len(self.backwardTape)):
                 let id = self.Tensors[self.backwardTape[i]].id
-                # memcpy(self.Tensors[id].gradient,self.Tensors[id].velocity,self.Tensors[id].cap)
                 for index in range(self.Tensors[id].getCap()):
                     self.Tensors[id].setVelocity(index, momentum * self.Tensors[id].getVelocity(index) + lr * self.Tensors[id].getGradient(index))
                     self.Tensors[id].setData(index, self.Tensors[id].getData(index) - self.Tensors[id].getVelocity(index))
