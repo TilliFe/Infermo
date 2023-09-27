@@ -62,15 +62,10 @@ fn ReLU(inout B: Tensor, A: Tensor):
             B.setData(i,val)
 
 fn MSE(inout C: Tensor, A: Tensor, B: Tensor):
-    let num_dims = A.getNum_dims()
-    var matrix_size = A.getShape(num_dims-2) * A.getShape(num_dims-1)
-    if(num_dims >= 3):
-        matrix_size = A.getSkips(num_dims-3)
-
     for index in range(A.getCap()):
         let error = (A.getData(index) - B.getData(index)) * (A.getData(index) - B.getData(index))
         C.setData(0, C.getData(0) + error)
-    C.setData(0, C.getData(0) / matrix_size)
+    C.setData(0, C.getData(0) / A.getCap())
 
 fn reshape(inout B: Tensor, A: Tensor):
     return

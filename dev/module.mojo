@@ -1,24 +1,20 @@
 from memory import memset_zero, memcpy
 from Tensor import Tensor, shape, Vec
 from tensorOps import mul, add, ReLU, MSE, reshape
-from tensorOpsGradients import mul_grad, add_grad, ReLU_grad, MSE_grad, reshape_grad
+from tensorOpsGradients import mul_grad, mul_grad_last, add_grad, ReLU_grad, MSE_grad, reshape_grad
 from runtime.llcl import Runtime
 
 struct Module:
     var Tensors: DynamicVector[Tensor]
     var counter: Int
     var forwardTape: DynamicVector[Int]
-    var forwardTapeGenerated: Bool
     var backwardTape: DynamicVector[Int]
-    var backwardTapeGenerated: Bool
 
     fn __init__(inout self):
         self.Tensors = DynamicVector[Tensor](0)
         self.counter = 0
         self.forwardTape = DynamicVector[Int]()
-        self.forwardTapeGenerated = False
         self.backwardTape = DynamicVector[Int]()
-        self.backwardTapeGenerated = False
 
     @always_inline
     fn addForward(inout self, TensorId: Int):
@@ -284,7 +280,7 @@ struct Module:
                 reshape(curr,par1)
 
     fn backwardOrder(inout self, Tensor: Tensor):
-        self.backwardTape = DynamicVector[Int](1)
+        self.backwardTape = DynamicVector[Int](0)
         self.backwardTape.push_back(Tensor.getId())
         var it = 0
         while(it < len(self.backwardTape)):
@@ -301,16 +297,21 @@ struct Module:
     fn backward(inout self, inout lastTensor: Tensor):
         self.backwardOrder(lastTensor)
         for i in range(self.counter):
-            if(self.Tensors[i].requiresGradient and self.Tensors[i].id != lastTensor.id):
+            if(self.Tensors[i].requiresGradient):
                 self.Tensors[i].setGradientAll(0)
 
         for i in range(len(self.backwardTape)):
             let currId = self.backwardTape[i]
             let curr = self.Tensors[currId]
             if(curr.getName() == 'mul'):
-                var par1 = self.Tensors[curr.getParent(0)]
-                var par2 = self.Tensors[curr.getParent(1)]
-                mul_grad(curr,par1,par2)
+                if(currId != lastTensor.id):
+                    var par1 = self.Tensors[curr.getParent(0)]
+                    var par2 = self.Tensors[curr.getParent(1)]
+                    mul_grad(curr,par1,par2)
+                else:
+                    var par1 = self.Tensors[curr.getParent(0)]
+                    var par2 = self.Tensors[curr.getParent(1)]
+                    mul_grad_last(curr,par1,par2)
             if(curr.getName() == 'add'):
                 var par1 = self.Tensors[curr.getParent(0)]
                 var par2 = self.Tensors[curr.getParent(1)]
@@ -326,11 +327,21 @@ struct Module:
                 var par1 = self.Tensors[curr.getParent(0)]
                 reshape_grad(curr,par1)
 
-    fn optimize(inout self, optType: String, lr: Float32):
+    fn optimize(inout self, optType: String, lr: Float32 = 0.001, momentum: Float32 = 0.9):
+        
         if(optType == "sgd"):
-            for i in range(self.counter):
-                for index in range(self.Tensors[i].getCap()):
-                    self.Tensors[i].setData(index, self.Tensors[i].getData(index) - lr * self.Tensors[i].getGradient(index))
+            for i in range(len(self.backwardTape)):
+                let id = self.Tensors[self.backwardTape[i]].id
+                for index in range(self.Tensors[id].getCap()):
+                    self.Tensors[id].setData(index, self.Tensors[id].getData(index) - lr * self.Tensors[id].getGradient(index))
+        
+        if(optType == "sgd_momentum"):
+            for i in range(len(self.backwardTape)):
+                let id = self.Tensors[self.backwardTape[i]].id
+                # memcpy(self.Tensors[id].gradient,self.Tensors[id].velocity,self.Tensors[id].cap)
+                for index in range(self.Tensors[id].getCap()):
+                    self.Tensors[id].setVelocity(index, momentum * self.Tensors[id].getVelocity(index) + lr * self.Tensors[id].getGradient(index))
+                    self.Tensors[id].setData(index, self.Tensors[id].getData(index) - self.Tensors[id].getVelocity(index))
 
 
     @always_inline
@@ -338,7 +349,7 @@ struct Module:
         print("Printing all Tensors of the Computational Graph .....\n")
         for i in range(self.counter):
             let n = self.Tensors[i]
-            print("Tensor ID: ", n.getId(), ", Name: ", n.getName())
+            print("Tensor ID: ", n.getId(), ", Name: ", n.getName(), ", rquiresGrad: ", n.getRequiresGradient(), ", cap = ", n.getCap())
             n.printData()
             n.printGradient()
         print("End of Printing all Tensors of the Computational Graph.")

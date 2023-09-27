@@ -1,6 +1,6 @@
 from memory import memset_zero, memcpy
 from memory.unsafe import Pointer
-from random import rand
+from random import rand, seed
 
 struct Vec:
     var shape: DynamicVector[Int]
@@ -19,6 +19,8 @@ fn shape(*_shape: Int) -> DynamicVector[Int]:
     let v = VariadicList[Int](_shape)
     let len = len(v)
     var shape = DynamicVector[Int](0)
+    if(len == 1):
+        shape.push_back(1)
     for i in range(len):
         shape.push_back(v[i])
     return shape
@@ -33,7 +35,8 @@ struct Tensor:
     var shape: Pointer[Int]
     var skips: Pointer[Int]
     var data: DTypePointer[DType.float32]
-    var gradient: DTypePointer[DType.float32]    
+    var gradient: DTypePointer[DType.float32] 
+    var velocity: DTypePointer[DType.float32] 
     var parents: Pointer[Int]
     var num_parents: Int
     var name: StringRef
@@ -63,6 +66,9 @@ struct Tensor:
         let gradient = DTypePointer[DType.float32].alloc(_cap)
         memset_zero(gradient, _cap)
     	
+        let velocity = DTypePointer[DType.float32].alloc(_cap)
+        memset_zero(velocity, _cap)
+
         let parents = Pointer[Int].alloc(64)
         memset_zero(parents, 64)
         let num_parents = 0 
@@ -78,6 +84,7 @@ struct Tensor:
             skips: skips,
             data: data,
             gradient: gradient,
+            velocity: velocity,
             parents: parents,
             num_parents: num_parents,
             inTensors: False,
@@ -205,6 +212,7 @@ struct Tensor:
         self.data.store(index, val)
 
     fn initRandom(self, min: Float32, max: Float32):
+        seed(self.id)
         rand(self.data, self.cap)
         for i in range(self.cap):
             self.setData(i, self.getData(i) * (max - min) + min)
@@ -383,6 +391,122 @@ struct Tensor:
                         if(i < num_dims-1):
                             print_no_newline(",")                        
                     print_no_newline("], Gradient>\n\n")  
+
+    @always_inline
+    fn setvelocityAll(self, val: Float32):
+        if(val == 0):
+            memset_zero(self.velocity,self.getCap())
+        else:
+            for i in range(self.getCap()):
+                self.velocity.store(i,val)
+
+    @always_inline
+    fn setVelocity(self, val: DTypePointer[DType.float32]):
+        memcpy(self.velocity, val, self.getCap())
+
+    @always_inline
+    fn setVelocity(self, index: Int, val: Float32):
+        self.velocity.store(index, val)
+
+    @always_inline
+    fn getVelocity(self, index: Int) -> Float32:
+        return self.velocity.load(index)
+
+    @always_inline
+    fn getVelocity(self) -> DTypePointer[DType.float32]:
+        return self.velocity    
+
+    @always_inline
+    fn setVelocity(self, pos: DynamicVector[Int], val: Float32):
+        let len = len(pos)
+        var index = 0
+        for j in range(len):
+            index += self.skips[j] * pos[j]
+
+        self.velocity.store(index, val)
+
+    @always_inline
+    fn setVelocity(self, _pos: Vec, val: Float32):
+        let pos = _pos.get()
+        let len = len(pos)
+        var index = 0
+        for j in range(len):
+            index += self.skips[j] * pos[j]
+
+        self.velocity.store(index, val)
+
+    @always_inline
+    fn getVelocity(self, _pos: Vec) -> Float32:
+        let pos = _pos.get()
+        let len = len(pos)
+        var index = 0
+        for j in range(len):
+            index += self.skips[j] * pos[j]
+
+        return self.velocity.load(index)
+
+    @always_inline
+    fn getVelocity(self, *_pos: Int) -> Float32:
+        let pos = VariadicList[Int](_pos)
+        let len = len(pos)
+        var index = 0
+        for j in range(len):
+            index += self.skips[j] * pos[j]
+
+        return self.velocity.load(index)
+
+
+    @always_inline
+    fn printVelocity(self):
+        let num_dims = self.getNum_dims()
+        let row: Int = self.getShape(num_dims-2)
+        let cols: Int = self.getShape(num_dims-1)
+        let col_skips: Int = (self.getSkips(0) * self.getShape(0)) // cols
+        print_no_newline("<Tensor: ")
+        for i in range(col_skips):
+            if(col_skips > 6 and i > 2 and i < col_skips - 3):
+                if(i == 3):
+                    print("                 ... ")
+                continue
+            else:
+                if(i > 0):
+                    print_no_newline("           ")
+                else:
+                    print_no_newline("[ ")
+
+                var indent = 0
+                for d in range(num_dims-1):
+                    if(cols * i % self.getSkips(d) == 0):
+                        print_no_newline("[ ")
+                        indent += 1
+                    else:
+                        print_no_newline("  ")
+
+                for j in range(cols):
+                    if(cols > 10 and j >= 3 and j < cols-3):
+                        if(j == 3):
+                            print_no_newline("... , ")
+                        continue
+                    else:
+                        let idx = cols * i + j
+                        print_no_newline(self.getVelocity(idx))
+                        if(j != cols-1):
+                            print_no_newline(', ')
+
+                for d in range(num_dims-2,-1,-1):
+                    if(cols * (i + 1) % self.getSkips(d) == 0):
+                        print_no_newline(" ]")
+
+                if(i < col_skips-1):
+                    print_no_newline(", ")
+                    put_new_line()
+                else:
+                    print_no_newline(" ], shape: [")
+                    for i in range(num_dims):
+                        print_no_newline(self.getShape(i))
+                        if(i < num_dims-1):
+                            print_no_newline(",")                        
+                    print_no_newline("], velocity>\n\n")  
 
     @always_inline
     fn getNum_parents(self) -> Int:
