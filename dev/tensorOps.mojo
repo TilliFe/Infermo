@@ -33,6 +33,7 @@ fn mul(inout C: Tensor, A: Tensor, B: Tensor, rt: Runtime):
                 vectorize[nelts, dot](N)
         parallelize[calc_row](rt, M)
 
+@always_inline
 fn add(inout C: Tensor, A: Tensor, B: Tensor):
     let num_dims = A.getNum_dims()
     var matrix_size = A.getShape(num_dims-2) * A.getShape(num_dims-1)
@@ -51,13 +52,14 @@ fn add(inout C: Tensor, A: Tensor, B: Tensor):
         for i in range(C.getCap()):
             C.data.store(i, A.data.load(i) + B.data.load(i))
 
+@always_inline
 fn sum(inout B: Tensor, A: Tensor):
     var sum: Float32 = 0
     for i in range(A.getCap()):
         sum += A.getData(i)
     B.setData(0,sum)
 
-
+@always_inline
 fn ReLU(inout B: Tensor, A: Tensor):
     for i in range(A.getCap()):
         let val = A.getData(i)
@@ -66,11 +68,13 @@ fn ReLU(inout B: Tensor, A: Tensor):
         else:
             B.setData(i,val)
 
+@always_inline
 fn MSE(inout C: Tensor, A: Tensor, B: Tensor):
     for index in range(A.getCap()):
         let error = (A.getData(index) - B.getData(index)) * (A.getData(index) - B.getData(index))
         C.setData(0, C.getData(0) + error)
     C.setData(0, C.getData(0) / A.getCap())
 
+@always_inline
 fn reshape(inout B: Tensor, A: Tensor):
     return

@@ -286,7 +286,7 @@ struct Module:
                 let par2 = self.Tensors[curr.getParent(1)]
                 add(curr,par1,par2)
             if(curr.getName() == 'sum'):
-                var par1 = self.Tensors[curr.getParent(0)]
+                let par1 = self.Tensors[curr.getParent(0)]
                 sum(curr,par1)
             if(curr.getName() == 'ReLU'):
                 let par1 = self.Tensors[curr.getParent(0)]

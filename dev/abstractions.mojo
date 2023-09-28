@@ -7,11 +7,11 @@ fn Linear(inout nn: Module, inout x: Tensor, num_neurons: Int, addBias : Bool = 
     let x_cols = x.getShape(x.num_dims - 1)
     var W = Tensor(shape(num_neurons,x_rows))
 
-    W.initRandom(-0.1,0.1)
+    W.initRandomHe()
     if(addBias):
         var bias = Tensor(shape(num_neurons,1))
         var ones = Tensor(shape(1,x_cols))
-        bias.initRandom(-0.1,0.1)
+        bias.setDataAll(0.001)
         ones.setDataAll(1)
         ones.requiresGradient = False
         var wx = nn.mul(W,x)    

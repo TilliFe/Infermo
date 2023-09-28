@@ -1,6 +1,7 @@
 from memory import memset_zero, memcpy
 from memory.unsafe import Pointer
 from random import rand, seed
+from math import sqrt, cos, sin, log
 
 struct Vec:
     var shape: DynamicVector[Int]
@@ -212,10 +213,23 @@ struct Tensor:
         self.data.store(index, val)
 
     fn initRandom(self, min: Float32, max: Float32):
-        seed(self.id)
+        seed()
         rand(self.data, self.cap)
         for i in range(self.cap):
             self.setData(i, self.getData(i) * (max - min) + min)
+
+    fn initRandomHe(self):
+        seed()
+        let pi = 3.14159265358979
+        let u1 = DTypePointer[DType.float32].alloc(self.cap) 
+        let u2 = DTypePointer[DType.float32].alloc(self.cap) 
+        rand(u1, self.cap)
+        rand(u2, self.cap)
+        for i in range(self.cap):
+            let z = sqrt(-Float32(2.0) * log(u1.load(i))) * cos(Float32(2.0) * pi * u2.load(i))
+            let sigma = sqrt( Float32(2.0) / self.shape[self.num_dims-1]) 
+            self.setData(i, z * sigma)
+
 
     @always_inline
     fn getData(self, index: Int) -> Float32:
