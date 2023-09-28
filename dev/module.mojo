@@ -1,7 +1,7 @@
 from memory import memset_zero, memcpy
 from Tensor import Tensor, shape, Vec
-from tensorOps import mul, add, ReLU, MSE, reshape
-from tensorOpsGradients import mul_grad, mul_grad_last, add_grad, ReLU_grad, MSE_grad, reshape_grad
+from tensorOps import mul, add, ReLU, sum, MSE, reshape
+from tensorOpsGradients import mul_grad, add_grad, ReLU_grad, sum_grad, MSE_grad, reshape_grad
 from runtime.llcl import Runtime
 
 struct Module:
@@ -164,6 +164,23 @@ struct Module:
 
         return B
 
+
+    @always_inline
+    fn sum(inout self, inout A: Tensor) -> Tensor: 
+
+        var B = Tensor(shape(1,1))
+
+        B.setName('sum')
+
+        if(not A.getInTensors()):
+            B.addParent(self.counter)
+            self.addTensor(A)
+        else:
+            B.addParent(A.getId())
+        self.addTensor(B)
+
+        return B
+
     @always_inline
     fn MSE(inout self, inout A: Tensor, inout B: Tensor) -> Tensor:
 
@@ -268,6 +285,9 @@ struct Module:
                 let par1 = self.Tensors[curr.getParent(0)]
                 let par2 = self.Tensors[curr.getParent(1)]
                 add(curr,par1,par2)
+            if(curr.getName() == 'sum'):
+                var par1 = self.Tensors[curr.getParent(0)]
+                sum(curr,par1)
             if(curr.getName() == 'ReLU'):
                 let par1 = self.Tensors[curr.getParent(0)]
                 ReLU(curr,par1) 
@@ -295,6 +315,9 @@ struct Module:
 
     @always_inline
     fn backward(inout self, inout lastTensor: Tensor):
+        if(lastTensor.cap != 1):
+            print("Error: Gradient can be implicitly created only for scalar outputs")
+            return
         self.backwardOrder(lastTensor)
         for i in range(self.counter):
             if(self.Tensors[i].requiresGradient):
@@ -304,19 +327,17 @@ struct Module:
             let currId = self.backwardTape[i]
             let curr = self.Tensors[currId]
             if(curr.getName() == 'mul'):
-                if(currId != lastTensor.id):
-                    var par1 = self.Tensors[curr.getParent(0)]
-                    var par2 = self.Tensors[curr.getParent(1)]
-                    mul_grad(curr,par1,par2)
-                else:
-                    var par1 = self.Tensors[curr.getParent(0)]
-                    var par2 = self.Tensors[curr.getParent(1)]
-                    mul_grad_last(curr,par1,par2)
+                var par1 = self.Tensors[curr.getParent(0)]
+                var par2 = self.Tensors[curr.getParent(1)]
+                with Runtime() as rt:
+                    mul_grad(curr,par1,par2,rt)
             if(curr.getName() == 'add'):
-                if(currId != lastTensor.id):
-                    var par1 = self.Tensors[curr.getParent(0)]
-                    var par2 = self.Tensors[curr.getParent(1)]
-                    add_grad(curr,par1,par2)
+                var par1 = self.Tensors[curr.getParent(0)]
+                var par2 = self.Tensors[curr.getParent(1)]
+                add_grad(curr,par1,par2)
+            if(curr.getName() == 'sum'):
+                var par1 = self.Tensors[curr.getParent(0)]
+                sum_grad(curr,par1)
             if(curr.getName() == 'ReLU'):
                 var par1 = self.Tensors[curr.getParent(0)]
                 ReLU_grad(curr,par1)

@@ -7,7 +7,10 @@ from memory.unsafe import DTypePointer
 from random import rand, random_float64
 from sys.info import simdwidthof
 from runtime.llcl import Runtime
+from algorithm import parallelize, vectorize
 
+
+alias nelts = simdwidthof[DType.float32]()
 
 struct Matrix:
     var data: DTypePointer[DType.float32]
@@ -57,7 +60,7 @@ struct Matrix:
         for i in range(self.rows * self.cols):
             self.data.store(i, val)
 
-
+###################################################################################################
 
 # compute C = A * B [MxN] = [MxK] [KxN]
 fn matmul_naive(C: Matrix, A: Matrix, B: Matrix):
@@ -66,6 +69,17 @@ fn matmul_naive(C: Matrix, A: Matrix, B: Matrix):
             for n in range(C.cols): # N
                 C[m, n] += A[m, k] * B[k, n]
 
+fn par_matmul_naive(C: Matrix, A: Matrix, B: Matrix, rt: Runtime):
+    @parameter
+    fn calc_row(m: Int): # m: row in C
+        for k in range(A.cols): # K
+            @parameter
+            fn dot[nelts : Int](n : Int):
+                C.store[nelts](m,n, C.load[nelts](m,n) + A[m,k] * B.load[nelts](k,n))
+            vectorize[nelts, dot](C.cols) # N
+    parallelize[calc_row](rt, C.rows) # M
+
+###################################################################################################
 
 #compute  A = C * B_trans [MxK] = [MxN] * [NxK]
 fn matmulCB_naive(A: Matrix, C: Matrix, B: Matrix):
@@ -73,6 +87,18 @@ fn matmulCB_naive(A: Matrix, C: Matrix, B: Matrix):
         for n in range(C.cols): # N
             for k in range(A.cols): # K
                 A[m, k] += C[m, n] * B[k, n]
+
+fn par_matmulCB_naive(A: Matrix, C: Matrix, B: Matrix, rt: Runtime):
+    @parameter
+    fn calc_row(m: Int):
+        for n in range(B.cols):
+            @parameter
+            fn dot[nelts : Int](k : Int):
+                A.store[nelts](m,k, A.load[nelts](m,k) + C[m,n] * B.load[nelts](k,n))
+            vectorize[nelts, dot](A.cols)
+    parallelize[calc_row](rt, A.rows) # K
+
+###################################################################################################
 
 #compute  B = A_trans * C [KxN] = [KxM] * [M,N]
 fn matmulAC_naive(B: Matrix, A: Matrix, C: Matrix):
@@ -82,8 +108,28 @@ fn matmulAC_naive(B: Matrix, A: Matrix, C: Matrix):
                 B[k, n] += A[m, k] * C[m, n]
 
 
+
 ###################################################
 
+fn test0():
+    print("\ntest0")
+    let M = 2
+    let K = 3
+    let N = 4
+
+    let A = Matrix(M,K)
+    let B = Matrix(K,N)
+    let C = Matrix(M,N)
+
+    A.fill(2)
+    B.fill(3)
+    with Runtime() as rt:
+        par_matmul_naive(C,A,B,rt)
+    A.print()
+    B.print()
+    C.print() 
+
+###################################################
 
 fn test1():
     print("\ntest1")
@@ -97,6 +143,7 @@ fn test1():
 
     C.fill(2)
     A.fill(3)
+
     matmulAC_naive(A,C,B)
     A.print()
     C.print()
@@ -168,7 +215,8 @@ fn test5():
 
     C.fill(2)
     B.fill(3)
-    matmulCB_naive(A,C,B)
+    with Runtime() as rt:
+        par_matmulCB_naive(A,C,B,rt)
     B.print()
     C.print()
     A.print()
@@ -185,7 +233,8 @@ fn test6():
 
     C.fill(2)
     B.fill(3)
-    matmulCB_naive(A,C,B)
+    with Runtime() as rt:
+        par_matmulCB_naive(A,C,B,rt)
     B.print()
     C.print()
     A.print()
@@ -202,7 +251,8 @@ fn test7():
 
     C.fill(2)
     B.fill(3)
-    matmulCB_naive(A,C,B)
+    with Runtime() as rt:
+        par_matmulCB_naive(A,C,B,rt)
     B.print()
     C.print()
     A.print()
@@ -219,12 +269,16 @@ fn test8():
 
     C.fill(2)
     B.fill(3)
-    matmulCB_naive(A,C,B)
+    with Runtime() as rt:
+        par_matmulCB_naive(A,C,B,rt)
     B.print()
     C.print()
     A.print()
 
 fn main():
+
+    test0()
+
     # test1()
     # test2()
     # test3()

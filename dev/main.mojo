@@ -1,16 +1,8 @@
 from module import Module
 from Tensor import Tensor, shape
+from abstractions import Linear
 from random import rand, random_si64, seed
 from math import sin
-
-# define one layer of an MLP
-fn Linear(inout nn: Module, inout x: Tensor, numNeurons: Int) -> Tensor:
-    let x_dim = x.getShape(x.num_dims - 2)
-    var W = Tensor(shape(numNeurons,x_dim))
-    W.initRandom(-0.1,0.1)
-    x = nn.mul(W,x)
-    x = nn.ReLU(x)
-    return x
 
 # define the model and its behaviour
 struct model:
@@ -21,17 +13,17 @@ struct model:
     var loss: Tensor
 
     fn __init__(inout self):
-        self.input = Tensor(shape(1,64))
+        self.input = Tensor(shape(1,512))
         self.input.requiresGradient = False
-        self.trueVals = Tensor(shape(1,64))
+        self.trueVals = Tensor(shape(1,512))
         self.trueVals.requiresGradient = False
         self.nn = Module()
 
         # define model architecture
-        var x = Linear(self.nn,self.input,16)
+        var x = Linear(self.nn,self.input, num_neurons=32, addBias=True, activation='ReLU')
         for i in range(1):
-            x = Linear(self.nn,x,128)
-        self.logits = Linear(self.nn,x,1)
+            x = Linear(self.nn,x, num_neurons=128, addBias=True, activation='ReLU')
+        self.logits = Linear(self.nn,x,1,True,'none')
         self.loss = self.nn.MSE(self.trueVals,self.logits)
         
     fn forward(inout self, _input: DTypePointer[DType.float32], _trueVals: DTypePointer[DType.float32]) -> Tensor:
@@ -66,31 +58,29 @@ struct DataGenerator:
         for i in range(self.size):
             let x_rand = self.x.load(i) * (max - min) + min
             self.x.store(i, x_rand)
-            let res = 0.5 + 0.5*sin(10*x_rand)
+            let res = 0.5 + 0.5*sin(5*x_rand)
             self.y.store(i, res) 
 
 
 # train the model
 fn main():
 
-    let dataset = DataGenerator(64)
+    let dataset = DataGenerator(512)
     var model = model()
     let num_epochs = 10000
 
     var lossSum: Float32 = 0
     let every = 100
 
-    for epoch in range(1,num_epochs):
+    for epoch in range(0,num_epochs):
         dataset.random(epoch)
         let logits = model.forward(dataset.x,dataset.y)
         model.backward()
         model.step()
 
         lossSum += model.loss.getData(0)
-        if( epoch % every == 0):
+        if( epoch % every == 0 and epoch > 0):
             print("\nEpoch", epoch,", AvgLoss = ", lossSum / every)
             lossSum = 0      
             # logits.printData()
             # model.nn.printTensors()
-
-

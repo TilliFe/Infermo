@@ -44,13 +44,18 @@ fn add(inout C: Tensor, A: Tensor, B: Tensor):
 
     if(C.getCap() > nelts):
         for i in range(0,C.getCap() - (nelts), nelts):
-            print(i)
             C.data.simd_store[nelts](i, A.data.simd_load[nelts](i) + B.data.simd_load[nelts](i))
         for i in range(C.getCap() - nelts, C.getCap()):
             C.data.store(i, A.data.load(i) + B.data.load(i))
     else:
         for i in range(C.getCap()):
             C.data.store(i, A.data.load(i) + B.data.load(i))
+
+fn sum(inout B: Tensor, A: Tensor):
+    var sum: Float32 = 0
+    for i in range(A.getCap()):
+        sum += A.getData(i)
+    B.setData(0,sum)
 
 
 fn ReLU(inout B: Tensor, A: Tensor):

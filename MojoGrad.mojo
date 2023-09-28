@@ -8,126 +8,6 @@ from random import rand, random_si64, seed
 from math import sin
 
 
-@always_inline
-fn mul_grad(C: Tensor, inout A: Tensor, inout B: Tensor):
-
-    let num_dims = A.getNum_dims()
-    var A_matrix_size = A.shape[num_dims-2] * A.shape[num_dims-1]
-    var B_matrix_size = B.shape[num_dims-2] * B.shape[num_dims-1]
-    var C_matrix_size = C.shape[num_dims-2] * C.shape[num_dims-1]
-    if(num_dims >= 3):
-        A_matrix_size = A.skips[num_dims-3]
-        B_matrix_size = B.skips[num_dims-3]
-        C_matrix_size = C.skips[num_dims-3]   
-
-    let M = A.shape[num_dims-2]
-    let K = B.shape[num_dims-2]  
-    let N = B.shape[num_dims-1]
-
-    for s in range(A.getCap() // A_matrix_size):
-        let offset_C = s * C_matrix_size
-        let offset_B = s * B_matrix_size
-        let offset_A = s * A_matrix_size 
-
-        if (A.getRequiresGradient()):
-            for m in range(M):
-                for k in range(K):
-                    for n in range(N):
-                        let index_A = offset_A + m * K + k
-                        let index_C = offset_C + m * N + n
-                        let index_B = offset_B + k * N + n
-                        let a = A.getGradient(index_A) + C.getGradient(index_C) * B.getData(index_B) 
-                        A.setGradient(index_A, a) 
-
-            for i in range(A_matrix_size):
-                A.setGradient(offset_A + i, A.getGradient(offset_A + i) / N)
-
-        if (B.getRequiresGradient()): 
-            for k in range(K):
-                for n in range(N): 
-                    for m in range(M): 
-                        let index_B = offset_B + k * N + n
-                        let index_A = offset_A + m * K + k
-                        let index_C = offset_C + m * N + n
-                        let b = B.getGradient(index_B) + A.getData(index_A) * C.getGradient(index_C)  
-                        B.setGradient(index_B, b) 
-            
-            for i in range(B_matrix_size):
-                B.setGradient(offset_B + i, B.getGradient(offset_B + i) / N) 
-
-@always_inline
-fn mul_grad_last(C: Tensor, inout A: Tensor, inout B: Tensor):
-
-    let num_dims = A.getNum_dims()
-    var A_matrix_size = A.shape[num_dims-2] * A.shape[num_dims-1]
-    var B_matrix_size = B.shape[num_dims-2] * B.shape[num_dims-1]
-    var C_matrix_size = C.shape[num_dims-2] * C.shape[num_dims-1]
-    if(num_dims >= 3):
-        A_matrix_size = A.skips[num_dims-3]
-        B_matrix_size = B.skips[num_dims-3]
-        C_matrix_size = C.skips[num_dims-3]   
-
-    let M = A.shape[num_dims-2]
-    let K = B.shape[num_dims-2]  
-    let N = B.shape[num_dims-1]
-
-    for s in range(A.getCap() // A_matrix_size):
-        let offset_C = s * C_matrix_size
-        let offset_B = s * B_matrix_size
-        let offset_A = s * A_matrix_size 
-
-        if (A.getRequiresGradient()):
-            for m in range(M):
-                for k in range(K):
-                    for n in range(N):
-                        let index_A = offset_A + m * K + k
-                        let index_B = offset_B + k * N + n
-                        let a = A.getGradient(index_A) + B.getData(index_B) 
-                        A.setGradient(index_A, a) 
-
-            for i in range(A_matrix_size):
-                A.setGradient(offset_A + i, A.getGradient(offset_A + i) / N)
-
-        if (B.getRequiresGradient()): 
-            for k in range(K):
-                for n in range(N): 
-                    for m in range(M): 
-                        let index_B = offset_B + k * N + n
-                        let index_A = offset_A + m * K + k
-                        let b = B.getGradient(index_B) + A.getData(index_A)
-                        B.setGradient(index_B, b) 
-            
-            for i in range(B_matrix_size):
-                B.setGradient(offset_B + i, B.getGradient(offset_B + i) / N) 
-
-fn add_grad(C: Tensor, inout A: Tensor, inout B: Tensor):
-    A.setGradient(C.getGradient())
-    B.setGradient(C.getGradient())
-
-fn ReLU_grad(B: Tensor, inout A: Tensor):
-    A.setGradient(B.getGradient())
-    for i in range(A.getCap()):
-        let val = A.getData(i)
-        if val < 0:
-            A.setGradient(i, 0)
-
-fn MSE_grad(C: Tensor, inout A: Tensor, inout B: Tensor): # A: TrueVals, B: Logits
-    let num_dims = A.getNum_dims()
-    let M = A.getShape(num_dims-2)
-    let N = A.getShape(num_dims-1)
-    var matrix_size = M*N
-    if(num_dims >= 3):
-        matrix_size = A.getSkips(num_dims-3)
-
-    for index in range(A.getCap()):
-        let grad = Float32(2) * (B.getData(index) - A.getData(index)) / N
-        A.setGradient(index, grad) 
-        B.setGradient(index, grad) 
-
-fn reshape_grad(B: Tensor, inout A: Tensor):
-    A.setGradient(B.getGradient())
-
-
 alias nelts = simdwidthof[DType.float32]()
 
 @always_inline
@@ -170,13 +50,18 @@ fn add(inout C: Tensor, A: Tensor, B: Tensor):
 
     if(C.getCap() > nelts):
         for i in range(0,C.getCap() - (nelts), nelts):
-            print(i)
             C.data.simd_store[nelts](i, A.data.simd_load[nelts](i) + B.data.simd_load[nelts](i))
         for i in range(C.getCap() - nelts, C.getCap()):
             C.data.store(i, A.data.load(i) + B.data.load(i))
     else:
         for i in range(C.getCap()):
             C.data.store(i, A.data.load(i) + B.data.load(i))
+
+fn sum(inout B: Tensor, A: Tensor):
+    var sum: Float32 = 0
+    for i in range(A.getCap()):
+        sum += A.getData(i)
+    B.setData(0,sum)
 
 
 fn ReLU(inout B: Tensor, A: Tensor):
@@ -195,7 +80,103 @@ fn MSE(inout C: Tensor, A: Tensor, B: Tensor):
 
 fn reshape(inout B: Tensor, A: Tensor):
     return
-  
+
+
+@always_inline
+fn mul_grad(C: Tensor, inout A: Tensor, inout B: Tensor, rt: Runtime):
+
+    let num_dims = A.getNum_dims()
+    let A_matrix_size = A.shape[num_dims-2] * A.shape[num_dims-1]
+    let B_matrix_size = B.shape[num_dims-2] * B.shape[num_dims-1]
+    let C_matrix_size = C.shape[num_dims-2] * C.shape[num_dims-1] 
+
+    let M = A.shape[num_dims-2]
+    let K = B.shape[num_dims-2]  
+    let N = B.shape[num_dims-1]
+
+    for s in range(A.getCap() // A_matrix_size):
+        let offset_C = s * C_matrix_size
+        let offset_B = s * B_matrix_size
+        let offset_A = s * A_matrix_size 
+
+        if (A.getRequiresGradient()):
+
+            for m in range(M):
+                for k in range(K):
+                    for n in range(N):
+                        let index_A = offset_A + m * K + k
+                        let index_C = offset_C + m * N + n
+                        let index_B = offset_B + k * N + n
+                        let a = A.getGradient(index_A) + C.getGradient(index_C) * B.getData(index_B) 
+                        A.setGradient(index_A, a) 
+            
+            # @parameter
+            # fn calc_row_1(m: Int):
+            #     for k in range(K):
+            #         @parameter
+            #         fn dot[nelts: Int](n: Int):
+            #             let index_A = offset_A + m * K + k
+            #             let index_C = offset_C + m * N + n
+            #             let index_B = offset_B + k * N + n
+            #             let a = A.getGradient(index_A) + C.getGradient(index_C) * B.getData(index_B) 
+            #             A.setGradient(index_A, a) 
+            #         vectorize[nelts, dot](N)
+            # parallelize[calc_row_1](rt, M)
+
+        if (B.getRequiresGradient()): 
+            for k in range(K):
+                for n in range(N): 
+                    for m in range(M): 
+                        let index_B = offset_B + k * N + n
+                        let index_A = offset_A + m * K + k
+                        let index_C = offset_C + m * N + n
+                        let b = B.getGradient(index_B) + A.getData(index_A) * C.getGradient(index_C)  
+                        B.setGradient(index_B, b) 
+
+            # @parameter
+            # fn calc_row_2(k: Int):
+            #     for n in range(N):
+            #         @parameter
+            #         fn dot[nelts: Int](m: Int):
+            #             let index_B = offset_B + k * N + n
+            #             let index_A = offset_A + m * K + k
+            #             let index_C = offset_C + m * N + n
+            #             let b = B.getGradient(index_B) + A.getData(index_A) * C.getGradient(index_C)  
+            #             B.setGradient(index_B, b) 
+            #         vectorize[nelts, dot](M)
+            # parallelize[calc_row_2](rt, K)
+            
+fn add_grad(C: Tensor, inout A: Tensor, inout B: Tensor):
+    A.setGradient(C.getGradient())
+    B.setGradient(C.getGradient())
+
+fn sum_grad(B: Tensor, inout A: Tensor):
+    A.setGradientAll(1)
+
+fn ReLU_grad(B: Tensor, inout A: Tensor):
+    A.setGradient(B.getGradient())
+    for i in range(A.getCap()):
+        let val = A.getData(i)
+        if val < 0:
+            A.setGradient(i, 0)
+
+fn MSE_grad(C: Tensor, inout A: Tensor, inout B: Tensor): # A: TrueVals, B: Logits
+    let num_dims = A.getNum_dims()
+    let M = A.getShape(num_dims-2)
+    let N = A.getShape(num_dims-1)
+    var matrix_size = M*N
+    if(num_dims >= 3):
+        matrix_size = A.getSkips(num_dims-3)
+
+    for index in range(A.getCap()):
+        let grad = Float32(2) * (B.getData(index) - A.getData(index)) / A.getCap()
+        A.setGradient(index, grad) 
+        B.setGradient(index, grad) 
+
+fn reshape_grad(B: Tensor, inout A: Tensor):
+    A.setGradient(B.getGradient())
+
+
 
 struct Vec:
     var shape: DynamicVector[Int]
@@ -740,6 +721,7 @@ struct Tensor:
         return self.requiresGradient
 
 
+
 struct Module:
     var Tensors: DynamicVector[Tensor]
     var counter: Int
@@ -776,8 +758,9 @@ struct Module:
             shape.push_back(v[i])
 
         var newTensor = Tensor(shape)
+        # self.addTensor(newTensor)
 
-        return newTensor 
+        return newTensor #Pointer[Tensor].address_of(newTensor)
 
     @always_inline
     fn printTensor(self, index: Int):
@@ -899,6 +882,23 @@ struct Module:
 
         return B
 
+
+    @always_inline
+    fn sum(inout self, inout A: Tensor) -> Tensor: 
+
+        var B = Tensor(shape(1,1))
+
+        B.setName('sum')
+
+        if(not A.getInTensors()):
+            B.addParent(self.counter)
+            self.addTensor(A)
+        else:
+            B.addParent(A.getId())
+        self.addTensor(B)
+
+        return B
+
     @always_inline
     fn MSE(inout self, inout A: Tensor, inout B: Tensor) -> Tensor:
 
@@ -1003,6 +1003,9 @@ struct Module:
                 let par1 = self.Tensors[curr.getParent(0)]
                 let par2 = self.Tensors[curr.getParent(1)]
                 add(curr,par1,par2)
+            if(curr.getName() == 'sum'):
+                var par1 = self.Tensors[curr.getParent(0)]
+                sum(curr,par1)
             if(curr.getName() == 'ReLU'):
                 let par1 = self.Tensors[curr.getParent(0)]
                 ReLU(curr,par1) 
@@ -1030,6 +1033,9 @@ struct Module:
 
     @always_inline
     fn backward(inout self, inout lastTensor: Tensor):
+        if(lastTensor.cap != 1):
+            print("Error: Gradient can be implicitly created only for scalar outputs")
+            return
         self.backwardOrder(lastTensor)
         for i in range(self.counter):
             if(self.Tensors[i].requiresGradient):
@@ -1039,18 +1045,17 @@ struct Module:
             let currId = self.backwardTape[i]
             let curr = self.Tensors[currId]
             if(curr.getName() == 'mul'):
-                if(currId != lastTensor.id):
-                    var par1 = self.Tensors[curr.getParent(0)]
-                    var par2 = self.Tensors[curr.getParent(1)]
-                    mul_grad(curr,par1,par2)
-                else:
-                    var par1 = self.Tensors[curr.getParent(0)]
-                    var par2 = self.Tensors[curr.getParent(1)]
-                    mul_grad_last(curr,par1,par2)
+                var par1 = self.Tensors[curr.getParent(0)]
+                var par2 = self.Tensors[curr.getParent(1)]
+                with Runtime() as rt:
+                    mul_grad(curr,par1,par2,rt)
             if(curr.getName() == 'add'):
                 var par1 = self.Tensors[curr.getParent(0)]
                 var par2 = self.Tensors[curr.getParent(1)]
                 add_grad(curr,par1,par2)
+            if(curr.getName() == 'sum'):
+                var par1 = self.Tensors[curr.getParent(0)]
+                sum_grad(curr,par1)
             if(curr.getName() == 'ReLU'):
                 var par1 = self.Tensors[curr.getParent(0)]
                 ReLU_grad(curr,par1)
@@ -1073,7 +1078,6 @@ struct Module:
         if(optType == "sgd_momentum"):
             for i in range(len(self.backwardTape)):
                 let id = self.Tensors[self.backwardTape[i]].id
-                # memcpy(self.Tensors[id].gradient,self.Tensors[id].velocity,self.Tensors[id].cap)
                 for index in range(self.Tensors[id].getCap()):
                     self.Tensors[id].setVelocity(index, momentum * self.Tensors[id].getVelocity(index) + lr * self.Tensors[id].getGradient(index))
                     self.Tensors[id].setData(index, self.Tensors[id].getData(index) - self.Tensors[id].getVelocity(index))
@@ -1089,96 +1093,109 @@ struct Module:
             n.printGradient()
         print("End of Printing all Tensors of the Computational Graph.")
 
-                    
 
 # define one layer of an MLP
-fn Linear(inout nn: Module, inout x: Tensor, numNeurons: Int) -> Tensor:
-    let x_dim = x.getShape(x.num_dims - 2)
-    var W = Tensor(shape(numNeurons,x_dim))
+fn Linear(inout nn: Module, inout x: Tensor, num_neurons: Int, addBias : Bool = True, activation: String = 'ReLU') -> Tensor:
+    let x_rows = x.getShape(x.num_dims - 2)
+    let x_cols = x.getShape(x.num_dims - 1)
+    var W = Tensor(shape(num_neurons,x_rows))
+
     W.initRandom(-0.1,0.1)
-    x = nn.mul(W,x)
-    x = nn.ReLU(x)
+    if(addBias):
+        var bias = Tensor(shape(num_neurons,1))
+        var ones = Tensor(shape(1,x_cols))
+        bias.initRandom(-0.1,0.1)
+        ones.setDataAll(1)
+        ones.requiresGradient = False
+        var wx = nn.mul(W,x)    
+        var bo = nn.mul(bias,ones)
+        x = nn.add(wx,bo)
+        if(activation == 'ReLU'):
+            x = nn.ReLU(x)
+    else:
+        x = nn.mul(W,x)
+        if(activation == 'ReLU'):
+            x = nn.ReLU(x)
     return x
 
-# define the model and its behaviour
-struct model:
-    var nn: Module
-    var input: Tensor
-    var trueVals: Tensor
-    var logits: Tensor
-    var loss: Tensor
 
-    fn __init__(inout self):
-        self.input = Tensor(shape(1,64))
-        self.input.requiresGradient = False
-        self.trueVals = Tensor(shape(1,64))
-        self.trueVals.requiresGradient = False
-        self.nn = Module()
+# # define the model and its behaviour
+# struct model:
+#     var nn: Module
+#     var input: Tensor
+#     var trueVals: Tensor
+#     var logits: Tensor
+#     var loss: Tensor
 
-        # define model architecture
-        var x = Linear(self.nn,self.input,16)
-        for i in range(1):
-            x = Linear(self.nn,x,128)
-        self.logits = Linear(self.nn,x,1)
-        self.loss = self.nn.MSE(self.trueVals,self.logits)
+#     fn __init__(inout self):
+#         self.input = Tensor(shape(1,512))
+#         self.input.requiresGradient = False
+#         self.trueVals = Tensor(shape(1,512))
+#         self.trueVals.requiresGradient = False
+#         self.nn = Module()
+
+#         # define model architecture
+#         var x = Linear(self.nn,self.input, num_neurons=32, addBias=True, activation='ReLU')
+#         for i in range(1):
+#             x = Linear(self.nn,x, num_neurons=128, addBias=True, activation='ReLU')
+#         self.logits = Linear(self.nn,x,1,True,'none')
+#         self.loss = self.nn.MSE(self.trueVals,self.logits)
         
-    fn forward(inout self, _input: DTypePointer[DType.float32], _trueVals: DTypePointer[DType.float32]) -> Tensor:
-        self.nn.Tensors[1].setData(_input) # this is a bug, why cant we assign to self.input directly ? -> the id changes to two, dont know why
-        self.trueVals.setData(_trueVals)
-        self.nn.forward(self.logits)
-        return self.logits
+#     fn forward(inout self, _input: DTypePointer[DType.float32], _trueVals: DTypePointer[DType.float32]) -> Tensor:
+#         self.nn.Tensors[1].setData(_input) # this is a bug, why cant we assign to self.input directly ? -> the id changes to two, dont know why
+#         self.trueVals.setData(_trueVals)
+#         self.nn.forward(self.logits)
+#         return self.logits
 
-    fn backward(inout self):
-        self.nn.backward(self.loss)
+#     fn backward(inout self):
+#         self.nn.backward(self.loss)
 
-    fn step(inout self):
-        self.nn.optimize('sgd_momentum', lr = 0.1, momentum = 0.9)
-
-
-# Data Generator for a simple regression problem
-struct DataGenerator:
-    var size: Int
-    var x: DTypePointer[DType.float32]
-    var y: DTypePointer[DType.float32]
-
-    fn __init__(inout self, size: Int):
-        self.size = size
-        self.x = DTypePointer[DType.float32].alloc(self.size)
-        self.y = DTypePointer[DType.float32].alloc(self.size)
-
-    fn random(self, it: Int):
-        seed(it)
-        rand(self.x, self.size)
-        let min = -1
-        let max = 1
-        for i in range(self.size):
-            let x_rand = self.x.load(i) * (max - min) + min
-            self.x.store(i, x_rand)
-            let res = 0.5 + 0.5*sin(10*x_rand)
-            self.y.store(i, res) 
+#     fn step(inout self):
+#         self.nn.optimize('sgd_momentum', lr = 0.1, momentum = 0.9)
 
 
-# train the model
-fn main():
+# # Data Generator for a simple regression problem
+# struct DataGenerator:
+#     var size: Int
+#     var x: DTypePointer[DType.float32]
+#     var y: DTypePointer[DType.float32]
 
-    let dataset = DataGenerator(64)
-    var model = model()
-    let num_epochs = 10000
+#     fn __init__(inout self, size: Int):
+#         self.size = size
+#         self.x = DTypePointer[DType.float32].alloc(self.size)
+#         self.y = DTypePointer[DType.float32].alloc(self.size)
 
-    var lossSum: Float32 = 0
-    let every = 100
-
-    for epoch in range(1,num_epochs):
-        dataset.random(epoch)
-        let logits = model.forward(dataset.x,dataset.y)
-        model.backward()
-        model.step()
-
-        lossSum += model.loss.getData(0)
-        if( epoch % every == 0):
-            print("\nEpoch", epoch,", AvgLoss = ", lossSum / every)
-            lossSum = 0      
-            # logits.printData()
-            # model.nn.printTensors()
+#     fn random(self, it: Int):
+#         seed(it)
+#         rand(self.x, self.size)
+#         let min = -1
+#         let max = 1
+#         for i in range(self.size):
+#             let x_rand = self.x.load(i) * (max - min) + min
+#             self.x.store(i, x_rand)
+#             let res = 0.5 + 0.5*sin(5*x_rand)
+#             self.y.store(i, res) 
 
 
+# # train the model
+# fn main():
+
+#     let dataset = DataGenerator(512)
+#     var model = model()
+#     let num_epochs = 10000
+
+#     var lossSum: Float32 = 0
+#     let every = 100
+
+#     for epoch in range(0,num_epochs):
+#         dataset.random(epoch)
+#         let logits = model.forward(dataset.x,dataset.y)
+#         model.backward()
+#         model.step()
+
+#         lossSum += model.loss.getData(0)
+#         if( epoch % every == 0 and epoch > 0):
+#             print("\nEpoch", epoch,", AvgLoss = ", lossSum / every)
+#             lossSum = 0      
+#             # logits.printData()
+#             # model.nn.printTensors()
