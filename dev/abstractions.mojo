@@ -5,22 +5,22 @@ from module import Module
 fn Linear(inout nn: Module, inout x: Tensor, num_neurons: Int, addBias : Bool = True, activation: String = 'ReLU') -> Tensor:
     let x_rows = x.getShape(x.num_dims - 2)
     let x_cols = x.getShape(x.num_dims - 1)
-    var W = Tensor(shape(num_neurons,x_rows))
+    var W = Tensor(shape(x_cols,num_neurons))
 
     W.initRandomHe()
     if(addBias):
-        var bias = Tensor(shape(num_neurons,1))
-        var ones = Tensor(shape(1,x_cols))
-        bias.setDataAll(0.001)
+        var ones = Tensor(shape(x_rows,1))
+        var bias = Tensor(shape(1,num_neurons))
         ones.setDataAll(1)
         ones.requiresGradient = False
-        var wx = nn.mul(W,x)    
-        var bo = nn.mul(bias,ones)
-        x = nn.add(wx,bo)
+        bias.setDataAll(0.1)
+        var xW = nn.mul(x,W)    
+        var ob = nn.mul(ones,bias)
+        x = nn.add(xW,ob)
         if(activation == 'ReLU'):
             x = nn.ReLU(x)
     else:
-        x = nn.mul(W,x)
+        x = nn.mul(x,W)
         if(activation == 'ReLU'):
             x = nn.ReLU(x)
     return x

@@ -13,22 +13,22 @@ struct model:
     var loss: Tensor
 
     fn __init__(inout self):
-        self.input = Tensor(shape(1,512))
+        self.input = Tensor(shape(512,1))
         self.input.requiresGradient = False
-        self.trueVals = Tensor(shape(1,512))
+        self.trueVals = Tensor(shape(512,1))
         self.trueVals.requiresGradient = False
         self.nn = Module()
 
         # define model architecture
         var x = Linear(self.nn,self.input, num_neurons=8, addBias=True, activation='ReLU')
-        for i in range(2):
-            x = Linear(self.nn,x, num_neurons=16, addBias=True, activation='ReLU')
+        for i in range(0):
+            x = Linear(self.nn,x, num_neurons=8, addBias=True, activation='ReLU')
         self.logits = Linear(self.nn,x,1,True,'none')
         self.loss = self.nn.MSE(self.trueVals,self.logits)
 
     @always_inline     
     fn forward(inout self, _input: DTypePointer[DType.float32], _trueVals: DTypePointer[DType.float32]) -> Tensor:
-        self.nn.Tensors[1].setData(_input) # this is a bug, why cant we assign to self.input directly ? -> the id changes to two, dont know why
+        self.nn.Tensors[0].setData(_input) # this is a bug, why cant we assign to self.input directly ? -> the id changes to two, dont know why
         self.trueVals.setData(_trueVals)
         self.nn.forward(self.logits)
         return self.logits
@@ -39,7 +39,7 @@ struct model:
 
     @always_inline
     fn step(inout self):
-        self.nn.optimize('sgd_momentum', lr = 0.01, momentum = 0.9)
+        self.nn.optimize('sgd_momentum', lr = 0.1, momentum = 0.9)
 
 
 # Data Generator for a simple regression problem

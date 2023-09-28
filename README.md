@@ -57,7 +57,7 @@ from random import rand, random_si64, seed
 from math import sin
 ```
 
-Define the model architecture,the number of layers and neurons in each layer.
+Define the model architecture (simple MLP with ReLU activations and bias)
 
 ```python
 struct model:
@@ -68,28 +68,31 @@ struct model:
     var loss: Tensor
 
     fn __init__(inout self):
-        self.input = Tensor(shape(1,512))
+        self.input = Tensor(shape(512,1))
         self.input.requiresGradient = False
-        self.trueVals = Tensor(shape(1,512))
+        self.trueVals = Tensor(shape(512,1))
         self.trueVals.requiresGradient = False
         self.nn = Module()
 
         # define model architecture
-        var x = Linear(self.nn,self.input, num_neurons=32, addBias=True, activation='ReLU')
-        for i in range(1):
-            x = Linear(self.nn,x, num_neurons=128, addBias=True, activation='ReLU')
+        var x = Linear(self.nn,self.input, num_neurons=8, addBias=True, activation='ReLU')
+        for i in range(2):
+            x = Linear(self.nn,x, num_neurons=8, addBias=True, activation='ReLU')
         self.logits = Linear(self.nn,x,1,True,'none')
         self.loss = self.nn.MSE(self.trueVals,self.logits)
-        
+
+    @always_inline     
     fn forward(inout self, _input: DTypePointer[DType.float32], _trueVals: DTypePointer[DType.float32]) -> Tensor:
-        self.nn.Tensors[1].setData(_input) # this is a bug, why cant we assign to self.input directly ? -> the id changes to two, dont know why
+        self.nn.Tensors[0].setData(_input) # this is a bug, why cant we assign to self.input directly ? -> the id changes to two, dont know why
         self.trueVals.setData(_trueVals)
         self.nn.forward(self.logits)
         return self.logits
 
+    @always_inline
     fn backward(inout self):
         self.nn.backward(self.loss)
 
+    @always_inline
     fn step(inout self):
         self.nn.optimize('sgd_momentum', lr = 0.1, momentum = 0.9)
 ```
@@ -107,6 +110,7 @@ struct DataGenerator:
         self.x = DTypePointer[DType.float32].alloc(self.size)
         self.y = DTypePointer[DType.float32].alloc(self.size)
 
+    @always_inline
     fn random(self, it: Int):
         seed(it)
         rand(self.x, self.size)
@@ -115,8 +119,8 @@ struct DataGenerator:
         for i in range(self.size):
             let x_rand = self.x.load(i) * (max - min) + min
             self.x.store(i, x_rand)
-            let res = 0.5 + 0.5*sin(10*x_rand)
-            self.y.store(i, res)
+            let res = 0.5 + 0.5*sin(5*x_rand)
+            self.y.store(i, res) 
 ```
 
 Call the model and define the number of epochs, then let it train on a randomly generated batch of data.
@@ -126,7 +130,7 @@ fn main():
 
     let dataset = DataGenerator(512)
     var model = model()
-    let num_epochs = 10000
+    let num_epochs = 1000
 
     var lossSum: Float32 = 0
     let every = 100
@@ -139,9 +143,10 @@ fn main():
 
         lossSum += model.loss.getData(0)
         if( epoch % every == 0 and epoch > 0):
-            print("\nEpoch", epoch,", AvgLoss = ", lossSum / every)
+            print("Epoch", epoch,", AvgLoss = ", lossSum / every)
             lossSum = 0      
             # logits.printData()
+            # model.trueVals.printData()
             # model.nn.printTensors()
 ```
 
