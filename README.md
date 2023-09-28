@@ -1,12 +1,12 @@
-# MojoGrad🔥
+# Infermo🔥
 
-A small AutoDiff library in Mojo for Neural Network training.
+AutoDiff with Tensors in a thousand lines of pure Mojo code! 
 
-- **Warning**: Please note that MojoGrad is still a Proof of Concept for a Differentiable Programming Engine and is not quite usable yet.
+**Heads up**: Infermo, as a Differentiable Programming Engine, is currently in its proof-of-concept stage and is not be fully operational yet. It will be ready for some basic tests in a couple of days. 
 
 ## Features
 
-- **No External Libraries**: MojoGrad is built entirely in Mojo, without the use of any external libraries written in other languages like C++ or Python.
+- **No External Libraries**: Infermo is built entirely in Mojo, without the use of any external libraries written in other languages like C++ or Python.
 - **Easy Model Definition**: Define your models dynamically in an object oriented way just like in Pytorch.
 - **Automatic Differentiation**: Compute gradients automatically
 
@@ -17,7 +17,7 @@ A small AutoDiff library in Mojo for Neural Network training.
 Let's start with a basic multiplication between two tensors and their respective gradient computation.
 
 ```python
-from MojoGrad import Module, Tensor, shape
+from Infermo import Module, Tensor, shape
 
 fn main():
     # init
@@ -49,10 +49,10 @@ Let's now look at a slightly more elaborate example. Here we define a struct cal
 
 We also define a function Linear , which is basic basic MLP building block. Last but not least, we define a Data Generator, which provides data for a simple regression task, i.e. the Network should learn the sine curve on a given interval. (I.e. given the x values between 0 and 1, the model should learn to predict the proper y values.)
 
-Import the necessary parts from MojoGrad and the Mojo standard library
+Import the necessary parts from Infermo and the Mojo standard library
 
 ```python
-from MojoGrad import Module, Tensor, shape, Linear
+from Infermo import Module, Tensor, shape, Linear
 from random import rand, random_si64, seed
 from math import sin
 ```
@@ -83,7 +83,7 @@ struct model:
 
     @always_inline     
     fn forward(inout self, _input: DTypePointer[DType.float32], _trueVals: DTypePointer[DType.float32]) -> Tensor:
-        self.nn.Tensors[0].setData(_input) # this is a bug, why cant we assign to self.input directly ? -> the id changes to two, dont know why
+        self.nn.Tensors[0].setData(_input) 
         self.trueVals.setData(_trueVals)
         self.nn.forward(self.logits)
         return self.logits

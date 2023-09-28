@@ -1160,7 +1160,7 @@ struct model:
         # define model architecture
         var x = Linear(self.nn,self.input, num_neurons=8, addBias=True, activation='ReLU')
         for i in range(2):
-            x = Linear(self.nn,x, num_neurons=8, addBias=True, activation='ReLU')
+            x = Linear(self.nn,x, num_neurons=32, addBias=True, activation='ReLU')
         self.logits = Linear(self.nn,x,1,True,'none')
         self.loss = self.nn.MSE(self.trueVals,self.logits)
 
