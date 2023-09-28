@@ -2,7 +2,7 @@
 
 AutoDiff with Tensors in a thousand lines of pure Mojo code! 
 
-**Heads up**: Infermo, as a Differentiable Programming Engine, is currently in its proof-of-concept stage and is not be fully operational yet. It will be ready for some basic tests in a couple of days. 
+**Heads up**: Infermo, as a Differentiable Programming Engine, is currently in its proof-of-concept stage and is not fully operational yet. It will be ready for some basic tests in a couple of days. 
 
 ## Features
 
