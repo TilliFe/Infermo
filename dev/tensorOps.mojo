@@ -1,6 +1,7 @@
 from Tensor import Tensor
 from runtime.llcl import Runtime
 from algorithm import vectorize, parallelize
+from math import exp, log
 
 alias nelts = simdwidthof[DType.float32]()
 
@@ -53,13 +54,6 @@ fn add(inout C: Tensor, A: Tensor, B: Tensor):
             C.data.store(i, A.data.load(i) + B.data.load(i))
 
 @always_inline
-fn sum(inout B: Tensor, A: Tensor):
-    var sum: Float32 = 0
-    for i in range(A.getCap()):
-        sum += A.getData(i)
-    B.setData(0,sum)
-
-@always_inline
 fn ReLU(inout B: Tensor, A: Tensor):
     for i in range(A.getCap()):
         let val = A.getData(i)
@@ -69,6 +63,35 @@ fn ReLU(inout B: Tensor, A: Tensor):
             B.setData(i,val)
 
 @always_inline
+fn sum(inout B: Tensor, A: Tensor):
+    var sum: Float32 = 0
+    for i in range(A.getCap()):
+        sum += A.getData(i)
+    B.setData(0,sum)
+
+@always_inline
+fn softmax(inout B: Tensor, A: Tensor):
+    #by default take the softmax along the last dimension of the tensor
+    let num_dims = A.getNum_dims()
+    let matrix_size = A.getShape(num_dims-2) * A.getShape(num_dims-1)
+
+    let M = A.getShape(num_dims-2)
+    let N = A.getShape(num_dims-1)
+
+    for i in range(B.getCap()):
+        B.data.store(i,exp(A.data.load(i)))
+
+    for s in range(B.getCap() // matrix_size):
+        let offset = s * matrix_size
+        for m in range(M):
+            var sum : Float32 = 0
+            for n in range(N):
+                sum += B.data.load(offset + m*N + n)
+            for n in range(N):
+                B.data.store(offset + m*N + n, B.data.load(offset + m*N + n) / sum)
+
+
+@always_inline
 fn MSE(inout C: Tensor, A: Tensor, B: Tensor):
     for index in range(A.getCap()):
         let error = (A.getData(index) - B.getData(index)) * (A.getData(index) - B.getData(index))
@@ -76,5 +99,12 @@ fn MSE(inout C: Tensor, A: Tensor, B: Tensor):
     C.setData(0, C.getData(0) / A.getCap())
 
 @always_inline
+fn CE(inout C: Tensor, A: Tensor, B: Tensor):
+    for index in range(A.getCap()):
+        let error = -A.getData(index) * log(B.getData(index)) #(A.getData(index) - B.getData(index)) * (A.getData(index) - B.getData(index))
+        C.setData(0, C.getData(0) + error)
+    C.setData(0, C.getData(0) / A.getCap())
+
+@always_inline
 fn reshape(inout B: Tensor, A: Tensor):
-    return
+    B.setData(A.getData())

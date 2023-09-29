@@ -4,8 +4,9 @@ from memory import memset_zero, memcpy
 from random import rand
 from runtime.llcl import Runtime
 from algorithm import vectorize, parallelize
-from random import rand, random_si64, seed
-from math import sin, cos, log, sqrt
+from random import rand, random_si64, seed, randint
+from math import sin, cos, log, sqrt, exp
+from python import Python
 
 
 alias nelts = simdwidthof[DType.float32]()
@@ -59,13 +60,6 @@ fn add(inout C: Tensor, A: Tensor, B: Tensor):
             C.data.store(i, A.data.load(i) + B.data.load(i))
 
 @always_inline
-fn sum(inout B: Tensor, A: Tensor):
-    var sum: Float32 = 0
-    for i in range(A.getCap()):
-        sum += A.getData(i)
-    B.setData(0,sum)
-
-@always_inline
 fn ReLU(inout B: Tensor, A: Tensor):
     for i in range(A.getCap()):
         let val = A.getData(i)
@@ -75,6 +69,35 @@ fn ReLU(inout B: Tensor, A: Tensor):
             B.setData(i,val)
 
 @always_inline
+fn sum(inout B: Tensor, A: Tensor):
+    var sum: Float32 = 0
+    for i in range(A.getCap()):
+        sum += A.getData(i)
+    B.setData(0,sum)
+
+@always_inline
+fn softmax(inout B: Tensor, A: Tensor):
+    #by default take the softmax along the last dimension of the tensor
+    let num_dims = A.getNum_dims()
+    let matrix_size = A.getShape(num_dims-2) * A.getShape(num_dims-1)
+
+    let M = A.getShape(num_dims-2)
+    let N = A.getShape(num_dims-1)
+
+    for i in range(B.getCap()):
+        B.data.store(i,exp(A.data.load(i)))
+
+    for s in range(B.getCap() // matrix_size):
+        let offset = s * matrix_size
+        for m in range(M):
+            var sum : Float32 = 0
+            for n in range(N):
+                sum += B.data.load(offset + m*N + n)
+            for n in range(N):
+                B.data.store(offset + m*N + n, B.data.load(offset + m*N + n) / sum)
+
+
+@always_inline
 fn MSE(inout C: Tensor, A: Tensor, B: Tensor):
     for index in range(A.getCap()):
         let error = (A.getData(index) - B.getData(index)) * (A.getData(index) - B.getData(index))
@@ -82,8 +105,15 @@ fn MSE(inout C: Tensor, A: Tensor, B: Tensor):
     C.setData(0, C.getData(0) / A.getCap())
 
 @always_inline
+fn CE(inout C: Tensor, A: Tensor, B: Tensor):
+    for index in range(A.getCap()):
+        let error = -A.getData(index) * log(B.getData(index)) #(A.getData(index) - B.getData(index)) * (A.getData(index) - B.getData(index))
+        C.setData(0, C.getData(0) + error)
+    C.setData(0, C.getData(0) / A.getCap())
+
+@always_inline
 fn reshape(inout B: Tensor, A: Tensor):
-    return
+    B.setData(A.getData())
 
 
 @always_inline
@@ -156,16 +186,20 @@ fn add_grad(C: Tensor, inout A: Tensor, inout B: Tensor):
     B.setGradient(C.getGradient())
 
 @always_inline
-fn sum_grad(B: Tensor, inout A: Tensor):
-    A.setGradientAll(1)
-
-@always_inline
 fn ReLU_grad(B: Tensor, inout A: Tensor):
     A.setGradient(B.getGradient())
     for i in range(A.getCap()):
         let val = A.getData(i)
         if val < 0:
             A.setGradient(i, 0)
+
+@always_inline
+fn sum_grad(B: Tensor, inout A: Tensor):
+    A.setGradientAll(1)
+
+@always_inline
+fn softmax_grad(B: Tensor, inout A: Tensor):
+    A.setGradient(B.getGradient())
 
 @always_inline
 fn MSE_grad(C: Tensor, inout A: Tensor, inout B: Tensor): # A: TrueVals, B: Logits
@@ -182,9 +216,22 @@ fn MSE_grad(C: Tensor, inout A: Tensor, inout B: Tensor): # A: TrueVals, B: Logi
         B.setGradient(index, grad) 
 
 @always_inline
+fn CE_grad(C: Tensor, inout A: Tensor, inout B: Tensor): # A: TrueVals, B: Logits
+    let num_dims = A.getNum_dims()
+    let M = A.getShape(num_dims-2)
+    let N = A.getShape(num_dims-1)
+    var matrix_size = M*N
+    if(num_dims >= 3):
+        matrix_size = A.getSkips(num_dims-3)
+
+    for index in range(A.getCap()):
+        let grad = (B.getData(index) - A.getData(index)) / A.getCap()
+        A.setGradient(index, grad) 
+        B.setGradient(index, grad) 
+
+@always_inline
 fn reshape_grad(B: Tensor, inout A: Tensor):
     A.setGradient(B.getGradient())
-
 
 
 struct Vec:
@@ -743,6 +790,58 @@ struct Tensor:
         return self.requiresGradient
 
 
+    
+    @always_inline
+    fn printArgMax(self):
+        let num_dims = self.getNum_dims()
+        let row: Int = self.getShape(num_dims-2)
+        let cols: Int = self.getShape(num_dims-1)
+        let col_skips: Int = (self.getSkips(0) * self.getShape(0)) // cols
+        print_no_newline("<Tensor: ")
+        for i in range(col_skips):
+            if(col_skips > 6 and i > 2 and i < col_skips - 3):
+                if(i == 3):
+                    print("                 ... ")
+                continue
+            else:
+                if(i > 0):
+                    print_no_newline("           ")
+                else:
+                    print_no_newline("[ ")
+
+                var indent = 0
+                for d in range(num_dims-2):
+                    if(cols * i % self.getSkips(d) == 0):
+                        print_no_newline("[ ")
+                        indent += 1
+                    else:
+                        print_no_newline("  ")
+
+                var max : Float32 = 0
+                var max_counter: Float32 = 0
+                var max_idx: Float32 = 0
+                for j in range(cols):
+                    let idx = cols * i + j
+                    max_counter += Float32(1)
+                    if(self.loadData(idx) > max):
+                        max = self.loadData(idx)
+                        max_idx = max_counter                   
+                print_no_newline(max_idx)
+                for d in range(num_dims-2,0,-1):
+                    if(cols * (i + 1) % self.getSkips(d) == 0):
+                        print_no_newline(" ]")
+
+                if(i < col_skips-1):
+                    print_no_newline(", ")
+                    put_new_line()
+                else:
+                    print_no_newline(" ], shape: [")
+                    for i in range(num_dims):
+                        print_no_newline(self.getShape(i))
+                        if(i < num_dims-1):
+                            print_no_newline(",")                        
+                    print_no_newline("], Data>\n\n")  
+
 
 struct Module:
     var Tensors: DynamicVector[Tensor]
@@ -771,17 +870,17 @@ struct Module:
         self.counter += 1
         self.Tensors.push_back(a)
 
-    @always_inline
-    fn tensor(inout self, *s: Int) -> Tensor:
-        let v = VariadicList[Int](s)
-        let len = len(v)
-        var shape = DynamicVector[Int](0)
-        for i in range(len):
-            shape.push_back(v[i])
+    # @always_inline
+    # fn tensor(inout self, *s: Int) -> Tensor:
+    #     let v = VariadicList[Int](s)
+    #     let len = len(v)
+    #      shape = DynamicVector[Int](0)
+    #     for i in range(len):
+    #         shape.push_back(v[i])
 
-        var newTensor = Tensor(shape)
+    #     var newTensor = Tensor(shape)
 
-        return newTensor 
+    #     return newTensor
 
     @always_inline
     fn printTensor(self, index: Int):
@@ -921,6 +1020,26 @@ struct Module:
         return B
 
     @always_inline
+    fn softmax(inout self, inout A: Tensor) -> Tensor: 
+
+        var new_shape = DynamicVector[Int]()
+        for i in range(A.getNum_dims()):
+            new_shape.push_back(A.getShape(i))
+
+        var B = Tensor(new_shape)
+
+        B.setName('softmax')
+
+        if(not A.getInTensors()):
+            B.addParent(self.counter)
+            self.addTensor(A)
+        else:
+            B.addParent(A.getId())
+        self.addTensor(B)
+
+        return B
+
+    @always_inline
     fn MSE(inout self, inout A: Tensor, inout B: Tensor) -> Tensor:
 
         # check dimensions
@@ -937,6 +1056,39 @@ struct Module:
         var C = Tensor(shape(1))
 
         C.setName('MSE')
+
+        if(not A.getInTensors()):
+            C.addParent(self.counter)
+            self.addTensor(A)
+        else:
+            C.addParent(A.getId())
+
+        if(not B.getInTensors()):
+            C.addParent(self.counter)
+            self.addTensor(B)
+        else:
+            C.addParent(B.getId())
+        self.addTensor(C)
+
+        return C 
+
+    @always_inline
+    fn CE(inout self, inout A: Tensor, inout B: Tensor) -> Tensor:
+
+        # check dimensions
+        if(A.getNum_dims() != B.getNum_dims()):
+            print("Error (at MSE): number of dimensions are not equal")
+        let num_dims = A.getNum_dims()
+        if(A.getShape(num_dims-2) != B.getShape(num_dims-2) or A.getShape(num_dims-1) != B.getShape(num_dims-1)):
+            print("Error (at MSE): For MSE computation, Matrices need to in the following shape: C[mxn] = (A[mxn] - B[mxn])^2")
+
+        # init result Tensor 
+        var new_shape = DynamicVector[Int]()
+        for i in range(num_dims):
+            new_shape.push_back(A.getShape(i))
+        var C = Tensor(shape(1))
+
+        C.setName('CE')
 
         if(not A.getInTensors()):
             C.addParent(self.counter)
@@ -1024,16 +1176,23 @@ struct Module:
                 let par1 = self.Tensors[curr.getParent(0)]
                 let par2 = self.Tensors[curr.getParent(1)]
                 add(curr,par1,par2)
-            if(curr.getName() == 'sum'):
-                let par1 = self.Tensors[curr.getParent(0)]
-                sum(curr,par1)
             if(curr.getName() == 'ReLU'):
                 let par1 = self.Tensors[curr.getParent(0)]
                 ReLU(curr,par1) 
+            if(curr.getName() == 'sum'):
+                let par1 = self.Tensors[curr.getParent(0)]
+                sum(curr,par1)
+            if(curr.getName() == 'softmax'):
+                let par1 = self.Tensors[curr.getParent(0)]
+                softmax(curr,par1)
             if(curr.getName() == 'MSE'):
                 let par1 = self.Tensors[curr.getParent(0)]
                 let par2 = self.Tensors[curr.getParent(1)]
                 MSE(curr,par1,par2) 
+            if(curr.getName() == 'CE'):
+                let par1 = self.Tensors[curr.getParent(0)]
+                let par2 = self.Tensors[curr.getParent(1)]
+                CE(curr,par1,par2) 
             if(curr.getName() == 'reshape'):
                 let par1 = self.Tensors[curr.getParent(0)]
                 reshape(curr,par1)
@@ -1074,16 +1233,23 @@ struct Module:
                 var par1 = self.Tensors[curr.getParent(0)]
                 var par2 = self.Tensors[curr.getParent(1)]
                 add_grad(curr,par1,par2)
-            if(curr.getName() == 'sum'):
-                var par1 = self.Tensors[curr.getParent(0)]
-                sum_grad(curr,par1)
             if(curr.getName() == 'ReLU'):
                 var par1 = self.Tensors[curr.getParent(0)]
                 ReLU_grad(curr,par1)
+            if(curr.getName() == 'sum'):
+                var par1 = self.Tensors[curr.getParent(0)]
+                sum_grad(curr,par1)
+            if(curr.getName() == 'softmax'):
+                var par1 = self.Tensors[curr.getParent(0)]
+                softmax_grad(curr,par1)
             if(curr.getName() == 'MSE'):
                 var par1 = self.Tensors[curr.getParent(0)]
                 var par2 = self.Tensors[curr.getParent(1)]
                 MSE_grad(curr,par1,par2)
+            if(curr.getName() == 'CE'):
+                var par1 = self.Tensors[curr.getParent(0)]
+                var par2 = self.Tensors[curr.getParent(1)]
+                CE_grad(curr,par1,par2)
             if(curr.getName() == 'reshape'):
                 var par1 = self.Tensors[curr.getParent(0)]
                 reshape_grad(curr,par1)
@@ -1114,8 +1280,124 @@ struct Module:
             n.printGradient()
         print("End of Printing all Tensors of the Computational Graph.")
 
+                    
+struct DataLoader:
+    var indeces: DTypePointer[DType.int32]
+    var data: DTypePointer[DType.float32]
+    var file_path: String
+    var rows: Int
+    var cols: Int
+    var counter: Int
 
-# define one layer of an MLP
+    fn __init__(inout self, file_path: String)raises:
+        print("Loading Dataset...")
+        let np = Python.import_module("numpy")
+        let py = Python.import_module("builtins")
+
+        self.file_path = file_path
+        let np_data = np.loadtxt(self.file_path)
+        let np_shape = np_data.shape # ndim = 2 every time
+        
+        self.rows = np_shape[0].to_float64().to_int()
+        self.cols = np_shape[1].to_float64().to_int()
+        self.data = DTypePointer[DType.float32].alloc(self.rows * self.cols)
+        self.indeces = DTypePointer[DType.int32].alloc(self.rows)
+        self.counter = 0
+
+        for i in range(self.rows):
+            for j in range(self.cols):
+                self.data.store( i * self.cols + j, np_data[i][j].to_float64().cast[DType.float32]())
+
+        seed()
+        randint[DType.int32](self.indeces,self.rows,0,self.rows-1)
+    
+    fn load(inout self, batchSize: Int, start: Int, end: Int, scalingFactor: Float32 = Float32(1.0)) raises -> DTypePointer[DType.float32]:
+        # print(self.counter)
+        var _start = start
+        var _end = end
+        let _batchSize = batchSize
+        if(_start < 0):
+            _start = 0
+        if(_end>self.cols):
+            _end = self.cols
+
+        let batch = DTypePointer[DType.float32].alloc(_batchSize * (_end - _start))
+        if(_batchSize < self.rows and _batchSize * (self.counter+1) < self.rows):
+            self.counter += 1
+            for i in range(_batchSize):
+                let sampleIndex = self.indeces.load((self.counter-1) * _batchSize + i).to_int()
+                for j in range(_start,_end):
+                    batch.store(i * (_end-_start) + j - _start, scalingFactor * self.data.load(sampleIndex * self.cols + j))
+        elif(_batchSize < self.rows):
+            seed()
+            randint[DType.int32](self.indeces,self.rows,0,self.rows-1)
+            self.counter = 1
+            for i in range(_batchSize):
+                let sampleIndex = self.indeces.load((self.counter-1) * _batchSize + i).to_int()
+                for j in range(_start,_end):
+                    batch.store(i * (_end-_start) + j - _start, scalingFactor * self.data.load(sampleIndex * self.cols + j))
+        else:
+            print("Error: BatchSize exceeds the number of samples in the data set!")
+
+        # if(self.counter == 0):
+        #     for i in range(_batchSize):
+        #         for j in range(0,_end-_start):
+        #             if((_end-_start) > 30 and j >=10 and j <= ((_end-_start) - 10)):
+        #                 if(j == 10):
+        #                     print_no_newline("... ")
+        #                 continue
+        #             else:
+        #                 print_no_newline(batch.load(i * (_end-_start) + j), '')
+        #         put_new_line()
+        #     put_new_line()
+
+        return batch
+
+    fn load_again(inout self, batchSize: Int, start: Int, end: Int, scalingFactor: Float32 = Float32(1.0)) raises -> DTypePointer[DType.float32]:
+        var _start = start
+        var _end = end
+        let _batchSize = batchSize
+        if(_start < 0):
+            _start = 0
+        if(_end>self.cols):
+            _end = self.cols
+
+        let batch = DTypePointer[DType.float32].alloc(_batchSize * (_end - _start))
+        if(_batchSize < self.rows and _batchSize * (self.counter) < self.rows):
+            for i in range(_batchSize):
+                let sampleIndex = self.indeces.load((self.counter-1) * _batchSize + i).to_int()
+                for j in range(_start,_end):
+                    batch.store(i * (_end-_start) + j - _start, scalingFactor * self.data.load(sampleIndex * self.cols + j))
+
+        return batch
+
+    fn oneHot(inout self, batchSize: Int, index: Int, ndims: Int)raises -> DTypePointer[DType.float32]:
+        let _batchSize = batchSize
+        let batch = DTypePointer[DType.float32].alloc(_batchSize * ndims)
+
+        for i in range(_batchSize):
+            let sampleIndex = self.indeces.load((self.counter-1) * _batchSize + i).to_int()
+            let entry = self.data.load(sampleIndex * self.cols + index).to_int()
+            for j in range(ndims):
+                if(entry == j):
+                    batch.store(i * ndims + j, 1)
+                else:
+                    batch.store(i * ndims + j, 0)
+
+        return batch
+
+    fn print(inout self)raises:
+        print("Dataset:",self.file_path)
+        print("NumSamples:",self.rows)
+        print("SampleSize:",self.cols)
+        print("Example Sample:")
+        let exampleBatch = self.load(1,0,self.cols)
+        let exampleBatch2 = self.load(1,0,self.cols)
+        let exampleBatch3 = self.load(1,0,self.cols)
+        print("\n")
+
+
+@always_inline
 fn Linear(inout nn: Module, inout x: Tensor, num_neurons: Int, addBias : Bool = True, activation: String = 'ReLU') -> Tensor:
     let x_rows = x.getShape(x.num_dims - 2)
     let x_cols = x.getShape(x.num_dims - 1)
@@ -1140,7 +1422,48 @@ fn Linear(inout nn: Module, inout x: Tensor, num_neurons: Int, addBias : Bool = 
     return x
 
 
-# Simple introductory example ############################################################################
+@always_inline
+fn oneHot(inout A: Tensor) -> Tensor:
+
+    let num_dims = A.getNum_dims()
+    var new_shape = DynamicVector[Int]()
+
+    for i in range(num_dims-1):
+        new_shape.push_back(A.getShape(i))
+    new_shape.push_back(1)
+
+    let B = Tensor(new_shape)
+
+    let A_matrix_size = A.getShape(num_dims-2) * A.getShape(num_dims-1)
+    let M = A.getShape(num_dims-2)
+    let N = A.getShape(num_dims-1)
+
+    for s in range(A.getCap() // A_matrix_size):
+        let A_offset = s * A_matrix_size
+        let B_offset = s * M
+        for m in range(M):
+            var max: Float32 = 0
+            var argMax: Float32 = 0
+            var idx: Float32 = 0
+            for n in range(N):
+                let index = A_offset + m*N+n
+                if(A.getData(index) > max):
+                    max = A.getData(index)
+                    argMax = idx
+                idx += 1
+            B.setData(B_offset + m, argMax)
+    return B
+
+# compute similarity accuracy between tweo tensors along the last dimension
+fn accuracy(logits: Tensor, trueVals: Tensor) -> Float32:
+    var avgAcc: Float32 = 0
+    let N = trueVals.getShape(trueVals.num_dims-1)
+    for i in range(trueVals.getCap()):
+        if(trueVals.getData(i) == logits.getData(i)):
+            avgAcc += 1
+    return avgAcc / (trueVals.cap - N)
+
+
 
 # define the model and its behaviour
 struct model:
@@ -1149,26 +1472,38 @@ struct model:
     var trueVals: Tensor
     var logits: Tensor
     var loss: Tensor
+    var avgAcc: Float32
 
     fn __init__(inout self):
-        self.input = Tensor(shape(512,1))
+        self.input = Tensor(shape(64,784))
         self.input.requiresGradient = False
-        self.trueVals = Tensor(shape(512,1))
+        self.trueVals = Tensor(shape(64,10))
         self.trueVals.requiresGradient = False
         self.nn = Module()
+        self.avgAcc = 0
 
         # define model architecture
-        var x = Linear(self.nn,self.input, num_neurons=8, addBias=True, activation='ReLU')
-        for i in range(2):
-            x = Linear(self.nn,x, num_neurons=32, addBias=True, activation='ReLU')
-        self.logits = Linear(self.nn,x,1,True,'none')
+        var x = Linear(self.nn,self.input, num_neurons=64, addBias=True, activation='ReLU')
+        for i in range(1):
+            x = Linear(self.nn,x, num_neurons=128, addBias=True, activation='ReLU')
+        x = Linear(self.nn,x,10,True,'none')
+        self.logits = self.nn.softmax(x)
         self.loss = self.nn.MSE(self.trueVals,self.logits)
 
     @always_inline     
     fn forward(inout self, _input: DTypePointer[DType.float32], _trueVals: DTypePointer[DType.float32]) -> Tensor:
+
+        # fill the input and trueVals Tensors with theri data
         self.nn.Tensors[0].setData(_input) # this is a bug, why cant we assign to self.input directly ? -> the id changes to two, dont know why
         self.trueVals.setData(_trueVals)
+
+        # one forward pass through the network
         self.nn.forward(self.logits)
+
+        # some additional ops, not necessary for the training, just for showing the accuracy
+        let oneHots = oneHot(self.logits)
+        self.avgAcc = accuracy(oneHots,self.trueVals)
+
         return self.logits
 
     @always_inline
@@ -1177,77 +1512,131 @@ struct model:
 
     @always_inline
     fn step(inout self):
-        self.nn.optimize('sgd_momentum', lr = 0.1, momentum = 0.9)
-
-
-# Data Generator for a simple regression problem
-struct DataGenerator:
-    var size: Int
-    var x: DTypePointer[DType.float32]
-    var y: DTypePointer[DType.float32]
-
-    fn __init__(inout self, size: Int):
-        self.size = size
-        self.x = DTypePointer[DType.float32].alloc(self.size)
-        self.y = DTypePointer[DType.float32].alloc(self.size)
-
-    @always_inline
-    fn random(self, it: Int):
-        seed(it)
-        rand(self.x, self.size)
-        let min = -1
-        let max = 1
-        for i in range(self.size):
-            let x_rand = self.x.load(i) * (max - min) + min
-            self.x.store(i, x_rand)
-            let res = 0.5 + 0.5*sin(5*x_rand)
-            self.y.store(i, res) 
+        self.nn.optimize('sgd_momentum', lr = 0.05, momentum = 0.9)
 
 
 # train the model
-fn main():
+fn main()raises:
 
-    let dataset = DataGenerator(512)
+    # init
+    var dl = DataLoader('./dev/datasets/mnist.txt')
     var model = model()
-    let num_epochs = 1000
 
+    let num_epochs = 1000
     var lossSum: Float32 = 0
+    var avgAcc: Float32 = 0
     let every = 100
 
-    for epoch in range(0,num_epochs):
-        dataset.random(epoch)
-        let logits = model.forward(dataset.x,dataset.y)
+    for epoch in range(1,num_epochs+1):
+        # load a batch of images into the model
+        let inputs = dl.load(
+            batchSize=64,
+            start=1, # regarding the columns of the dataset
+            end=785,
+            scalingFactor=Float32(1)/Float32(255)
+        )
+        # load the labels for the images (oneHot encded from 0 to 9)
+        let labels = dl.oneHot(
+            batchSize=64,
+            index=0,
+            ndims=10
+        )
+        let logits = model.forward(inputs,labels)
         model.backward()
         model.step()
 
         lossSum += model.loss.getData(0)
-        if( epoch % every == 0 and epoch > 0):
-            print("Epoch", epoch,", AvgLoss = ", lossSum / every)
+        avgAcc += model.avgAcc
+        if( epoch % every == 0):
+            print("Epoch", epoch,", AvgLoss =", lossSum / every, ", AvgAccuracy =", avgAcc / every)
             lossSum = 0      
+            avgAcc = 0
             # logits.printData()
             # model.trueVals.printData()
-            # model.nn.printTensors()
 
 
-# fn main():
-#     # init
-#     var nn = Module()
-#     var A = Tensor(shape(2,3))
-#     var B = Tensor(shape(3,4))
+# # define the model and its behaviour
+# struct model:
+#     var nn: Module
+#     var input: Tensor
+#     var trueVals: Tensor
+#     var logits: Tensor
+#     var loss: Tensor
 
-#     # specify tensor entries
-#     A.setDataAll(2)
-#     B.setDataAll(3)
+#     fn __init__(inout self):
+#         self.input = Tensor(shape(512,1))
+#         self.input.requiresGradient = False
+#         self.trueVals = Tensor(shape(512,1))
+#         self.trueVals.requiresGradient = False
+#         self.nn = Module()
 
-#     # perform computation and print result
-#     var C = nn.mul(A,B)
-#     var D = nn.sum(C)
+#         # define model architecture
+#         var x = Linear(self.nn,self.input, num_neurons=8, addBias=True, activation='ReLU')
+#         for i in range(2):
+#             x = Linear(self.nn,x, num_neurons=32, addBias=True, activation='ReLU')
+#         self.logits = Linear(self.nn,x,1,True,'none')
+#         self.loss = self.nn.MSE(self.trueVals,self.logits)
 
-#     # perform computation and print result
-#     nn.forward(C)
-#     C.printData()
+#     @always_inline     
+#     fn forward(inout self, _input: DTypePointer[DType.float32], _trueVals: DTypePointer[DType.float32]) -> Tensor:
+#         self.nn.Tensors[0].setData(_input) # this is a bug, why cant we assign to self.input directly ? -> the id changes to two, dont know why
+#         self.trueVals.setData(_trueVals)
+#         self.nn.forward(self.logits)
+#         return self.logits
 
-#     # compute gradients of A and B
-#     nn.backward(D)
-#     A.printGradient()
-#     B.printGradient()
+#     @always_inline
+#     fn backward(inout self):
+#         self.nn.backward(self.loss)
+
+#     @always_inline
+#     fn step(inout self):
+#         self.nn.optimize('sgd_momentum', lr = 0.1, momentum = 0.9)
+
+
+# # Data Generator for a simple regression problem
+# struct DataGenerator:
+#     var size: Int
+#     var x: DTypePointer[DType.float32]
+#     var y: DTypePointer[DType.float32]
+
+#     fn __init__(inout self, size: Int):
+#         self.size = size
+#         self.x = DTypePointer[DType.float32].alloc(self.size)
+#         self.y = DTypePointer[DType.float32].alloc(self.size)
+
+#     @always_inline
+#     fn random(self, it: Int):
+#         seed(it)
+#         rand(self.x, self.size)
+#         let min = -1
+#         let max = 1
+#         for i in range(self.size):
+#             let x_rand = self.x.load(i) * (max - min) + min
+#             self.x.store(i, x_rand)
+#             let res = 0.5 + 0.5*sin(5*x_rand)
+#             self.y.store(i, res) 
+
+
+# # train the model
+# fn main()raises:
+
+#     let dataset = DataGenerator(512)
+#     var model = model()
+#     let num_epochs = 1000
+
+#     var lossSum: Float32 = 0
+#     let every = 100
+
+#     for epoch in range(0,num_epochs):
+#         dataset.random(epoch)
+#         let logits = model.forward(dataset.x,dataset.y)
+#         model.backward()
+#         model.step()
+
+#         lossSum += model.loss.getData(0)
+#         if( epoch % every == 0 and epoch > 0):
+#             print("Epoch", epoch,", AvgLoss = ", lossSum / every)
+#             lossSum = 0      
+#             # logits.printData()
+#             # model.trueVals.printData()
+#             # model.nn.printTensors()

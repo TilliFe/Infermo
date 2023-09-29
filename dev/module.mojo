@@ -1,7 +1,7 @@
 from memory import memset_zero, memcpy
 from Tensor import Tensor, shape, Vec
-from tensorOps import mul, add, ReLU, sum, MSE, reshape
-from tensorOpsGradients import mul_grad, add_grad, ReLU_grad, sum_grad, MSE_grad, reshape_grad
+from tensorOps import mul, add, ReLU, sum, softmax, MSE, CE, reshape
+from tensorOpsGradients import mul_grad, add_grad, ReLU_grad, sum_grad, softmax_grad, MSE_grad, CE_grad, reshape_grad
 from runtime.llcl import Runtime
 
 struct Module:
@@ -31,18 +31,17 @@ struct Module:
         self.counter += 1
         self.Tensors.push_back(a)
 
-    @always_inline
-    fn tensor(inout self, *s: Int) -> Tensor:
-        let v = VariadicList[Int](s)
-        let len = len(v)
-        var shape = DynamicVector[Int](0)
-        for i in range(len):
-            shape.push_back(v[i])
+    # @always_inline
+    # fn tensor(inout self, *s: Int) -> Tensor:
+    #     let v = VariadicList[Int](s)
+    #     let len = len(v)
+    #     var shape = DynamicVector[Int](0)
+    #     for i in range(len):
+    #         shape.push_back(v[i])
 
-        var newTensor = Tensor(shape)
-        # self.addTensor(newTensor)
+    #     var newTensor = Tensor(shape)
 
-        return newTensor #Pointer[Tensor].address_of(newTensor)
+    #     return newTensor
 
     @always_inline
     fn printTensor(self, index: Int):
@@ -182,6 +181,26 @@ struct Module:
         return B
 
     @always_inline
+    fn softmax(inout self, inout A: Tensor) -> Tensor: 
+
+        var new_shape = DynamicVector[Int]()
+        for i in range(A.getNum_dims()):
+            new_shape.push_back(A.getShape(i))
+
+        var B = Tensor(new_shape)
+
+        B.setName('softmax')
+
+        if(not A.getInTensors()):
+            B.addParent(self.counter)
+            self.addTensor(A)
+        else:
+            B.addParent(A.getId())
+        self.addTensor(B)
+
+        return B
+
+    @always_inline
     fn MSE(inout self, inout A: Tensor, inout B: Tensor) -> Tensor:
 
         # check dimensions
@@ -198,6 +217,39 @@ struct Module:
         var C = Tensor(shape(1))
 
         C.setName('MSE')
+
+        if(not A.getInTensors()):
+            C.addParent(self.counter)
+            self.addTensor(A)
+        else:
+            C.addParent(A.getId())
+
+        if(not B.getInTensors()):
+            C.addParent(self.counter)
+            self.addTensor(B)
+        else:
+            C.addParent(B.getId())
+        self.addTensor(C)
+
+        return C 
+
+    @always_inline
+    fn CE(inout self, inout A: Tensor, inout B: Tensor) -> Tensor:
+
+        # check dimensions
+        if(A.getNum_dims() != B.getNum_dims()):
+            print("Error (at MSE): number of dimensions are not equal")
+        let num_dims = A.getNum_dims()
+        if(A.getShape(num_dims-2) != B.getShape(num_dims-2) or A.getShape(num_dims-1) != B.getShape(num_dims-1)):
+            print("Error (at MSE): For MSE computation, Matrices need to in the following shape: C[mxn] = (A[mxn] - B[mxn])^2")
+
+        # init result Tensor 
+        var new_shape = DynamicVector[Int]()
+        for i in range(num_dims):
+            new_shape.push_back(A.getShape(i))
+        var C = Tensor(shape(1))
+
+        C.setName('CE')
 
         if(not A.getInTensors()):
             C.addParent(self.counter)
@@ -285,16 +337,23 @@ struct Module:
                 let par1 = self.Tensors[curr.getParent(0)]
                 let par2 = self.Tensors[curr.getParent(1)]
                 add(curr,par1,par2)
-            if(curr.getName() == 'sum'):
-                let par1 = self.Tensors[curr.getParent(0)]
-                sum(curr,par1)
             if(curr.getName() == 'ReLU'):
                 let par1 = self.Tensors[curr.getParent(0)]
                 ReLU(curr,par1) 
+            if(curr.getName() == 'sum'):
+                let par1 = self.Tensors[curr.getParent(0)]
+                sum(curr,par1)
+            if(curr.getName() == 'softmax'):
+                let par1 = self.Tensors[curr.getParent(0)]
+                softmax(curr,par1)
             if(curr.getName() == 'MSE'):
                 let par1 = self.Tensors[curr.getParent(0)]
                 let par2 = self.Tensors[curr.getParent(1)]
                 MSE(curr,par1,par2) 
+            if(curr.getName() == 'CE'):
+                let par1 = self.Tensors[curr.getParent(0)]
+                let par2 = self.Tensors[curr.getParent(1)]
+                CE(curr,par1,par2) 
             if(curr.getName() == 'reshape'):
                 let par1 = self.Tensors[curr.getParent(0)]
                 reshape(curr,par1)
@@ -335,16 +394,23 @@ struct Module:
                 var par1 = self.Tensors[curr.getParent(0)]
                 var par2 = self.Tensors[curr.getParent(1)]
                 add_grad(curr,par1,par2)
-            if(curr.getName() == 'sum'):
-                var par1 = self.Tensors[curr.getParent(0)]
-                sum_grad(curr,par1)
             if(curr.getName() == 'ReLU'):
                 var par1 = self.Tensors[curr.getParent(0)]
                 ReLU_grad(curr,par1)
+            if(curr.getName() == 'sum'):
+                var par1 = self.Tensors[curr.getParent(0)]
+                sum_grad(curr,par1)
+            if(curr.getName() == 'softmax'):
+                var par1 = self.Tensors[curr.getParent(0)]
+                softmax_grad(curr,par1)
             if(curr.getName() == 'MSE'):
                 var par1 = self.Tensors[curr.getParent(0)]
                 var par2 = self.Tensors[curr.getParent(1)]
                 MSE_grad(curr,par1,par2)
+            if(curr.getName() == 'CE'):
+                var par1 = self.Tensors[curr.getParent(0)]
+                var par2 = self.Tensors[curr.getParent(1)]
+                CE_grad(curr,par1,par2)
             if(curr.getName() == 'reshape'):
                 var par1 = self.Tensors[curr.getParent(0)]
                 reshape_grad(curr,par1)

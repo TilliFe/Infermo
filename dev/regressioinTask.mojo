@@ -67,7 +67,7 @@ struct DataGenerator:
 
 
 # train the model
-fn main():
+fn main()raises:
 
     let dataset = DataGenerator(512)
     var model = model()
@@ -89,27 +89,3 @@ fn main():
             # logits.printData()
             # model.trueVals.printData()
             # model.nn.printTensors()
-
-
-# fn main():
-#     # init
-#     var nn = Module()
-#     var A = Tensor(shape(2,3))
-#     var B = Tensor(shape(3,4))
-
-#     # specify tensor entries
-#     A.setDataAll(2)
-#     B.setDataAll(3)
-
-#     # perform computation and print result
-#     var C = nn.mul(A,B)
-#     var D = nn.sum(C)
-
-#     # perform computation and print result
-#     nn.forward(C)
-#     C.printData()
-
-#     # compute gradients of A and B
-#     nn.backward(D)
-#     A.printGradient()
-#     B.printGradient()

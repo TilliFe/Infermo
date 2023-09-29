@@ -74,16 +74,20 @@ fn add_grad(C: Tensor, inout A: Tensor, inout B: Tensor):
     B.setGradient(C.getGradient())
 
 @always_inline
-fn sum_grad(B: Tensor, inout A: Tensor):
-    A.setGradientAll(1)
-
-@always_inline
 fn ReLU_grad(B: Tensor, inout A: Tensor):
     A.setGradient(B.getGradient())
     for i in range(A.getCap()):
         let val = A.getData(i)
         if val < 0:
             A.setGradient(i, 0)
+
+@always_inline
+fn sum_grad(B: Tensor, inout A: Tensor):
+    A.setGradientAll(1)
+
+@always_inline
+fn softmax_grad(B: Tensor, inout A: Tensor):
+    A.setGradient(B.getGradient())
 
 @always_inline
 fn MSE_grad(C: Tensor, inout A: Tensor, inout B: Tensor): # A: TrueVals, B: Logits
@@ -96,6 +100,20 @@ fn MSE_grad(C: Tensor, inout A: Tensor, inout B: Tensor): # A: TrueVals, B: Logi
 
     for index in range(A.getCap()):
         let grad = Float32(2) * (B.getData(index) - A.getData(index)) / A.getCap()
+        A.setGradient(index, grad) 
+        B.setGradient(index, grad) 
+
+@always_inline
+fn CE_grad(C: Tensor, inout A: Tensor, inout B: Tensor): # A: TrueVals, B: Logits
+    let num_dims = A.getNum_dims()
+    let M = A.getShape(num_dims-2)
+    let N = A.getShape(num_dims-1)
+    var matrix_size = M*N
+    if(num_dims >= 3):
+        matrix_size = A.getSkips(num_dims-3)
+
+    for index in range(A.getCap()):
+        let grad = (B.getData(index) - A.getData(index)) / A.getCap()
         A.setGradient(index, grad) 
         B.setGradient(index, grad) 
 

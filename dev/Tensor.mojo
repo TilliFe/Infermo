@@ -1,5 +1,4 @@
 from memory import memset_zero, memcpy
-from memory.unsafe import Pointer
 from random import rand, seed
 from math import sqrt, cos, sin, log
 
@@ -557,3 +556,57 @@ struct Tensor:
     @always_inline
     fn getRequiresGradient(self) -> Bool:
         return self.requiresGradient
+
+
+    
+    @always_inline
+    fn printArgMax(self):
+        let num_dims = self.getNum_dims()
+        let row: Int = self.getShape(num_dims-2)
+        let cols: Int = self.getShape(num_dims-1)
+        let col_skips: Int = (self.getSkips(0) * self.getShape(0)) // cols
+        print_no_newline("<Tensor: ")
+        for i in range(col_skips):
+            if(col_skips > 6 and i > 2 and i < col_skips - 3):
+                if(i == 3):
+                    print("                 ... ")
+                continue
+            else:
+                if(i > 0):
+                    print_no_newline("           ")
+                else:
+                    print_no_newline("[ ")
+
+                var indent = 0
+                for d in range(num_dims-2):
+                    if(cols * i % self.getSkips(d) == 0):
+                        print_no_newline("[ ")
+                        indent += 1
+                    else:
+                        print_no_newline("  ")
+
+                var max : Float32 = 0
+                var max_counter: Float32 = 0
+                var max_idx: Float32 = 0
+                for j in range(cols):
+                    let idx = cols * i + j
+                    max_counter += Float32(1)
+                    if(self.loadData(idx) > max):
+                        max = self.loadData(idx)
+                        max_idx = max_counter                   
+                print_no_newline(max_idx)
+                for d in range(num_dims-2,0,-1):
+                    if(cols * (i + 1) % self.getSkips(d) == 0):
+                        print_no_newline(" ]")
+
+                if(i < col_skips-1):
+                    print_no_newline(", ")
+                    put_new_line()
+                else:
+                    print_no_newline(" ], shape: [")
+                    for i in range(num_dims):
+                        print_no_newline(self.getShape(i))
+                        if(i < num_dims-1):
+                            print_no_newline(",")                        
+                    print_no_newline("], Data>\n\n")  
+
