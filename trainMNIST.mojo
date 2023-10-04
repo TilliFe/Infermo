@@ -1,5 +1,4 @@
-
-from dv import Module, Tensor, shape, Linear, max, accuracy, DataLoader
+from infermo import Module, Tensor, shape, Linear, max, accuracy, DataLoader
 
 # define the model and its behaviour
 struct model:
@@ -55,7 +54,7 @@ struct model:
 fn main()raises:
 
     # init
-    var dl = DataLoader('./dv/datasets/mnist.txt')
+    var dl = DataLoader('./infermo/datasets/mnist.txt')
     var model = model()
 
     let num_epochs = 10000
@@ -89,8 +88,3 @@ fn main()raises:
             avgAcc = 0
             # logits.printData()
             # model.trueVals.printData()
-
-
-# fn main():
-#     let t = Tensor(shape(1,2,3))
-#     t.printData()

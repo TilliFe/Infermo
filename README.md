@@ -17,7 +17,7 @@
 Import the necessary parts from Infermo
 
 ```python
-from dv import Module, Tensor, shape, Linear, oneHot, accuracy
+from infermo import Module, Tensor, shape, Linear, max, accuracy
 ```
 
 Define the model architecture (simple MLP with ReLU activations and biases)
@@ -41,8 +41,8 @@ struct model:
 
         # define model architecture
         var x = Linear(self.nn,self.input, num_neurons=64, addBias=True, activation='ReLU')
-        for i in range(1):
-            x = Linear(self.nn,x, num_neurons=128, addBias=True, activation='ReLU')
+        for i in range(2):
+            x = Linear(self.nn,x, num_neurons=64, addBias=True, activation='ReLU')
         x = Linear(self.nn,x,10,True,'none')
         self.logits = self.nn.softmax(x)
         self.loss = self.nn.MSE(self.trueVals,self.logits)
@@ -51,7 +51,7 @@ struct model:
     fn forward(inout self, _input: DTypePointer[DType.float32], _trueVals: DTypePointer[DType.float32]) -> Tensor:
 
         # fill the input and trueVals Tensors with theri data
-        self.nn.Tensors[0].setData(_input) # this is a bug, why cant we assign to self.input directly ? -> the id changes to two, dont know why
+        self.nn.Tensors[0].setData(_input) # bug!
         self.trueVals.setData(_trueVals)
 
         # one forward pass through the network
@@ -69,7 +69,7 @@ struct model:
 
     @always_inline
     fn step(inout self):
-        self.nn.optimize('sgd_momentum', lr = 0.05, momentum = 0.9)
+        self.nn.optimize('sgd_momentum', lr = 0.0001, momentum = 0.9)
 ```
 
 Read in the MNIST dataset from a file, initialize the model and define the number of epochs, then let it train on a randomly generated batch of data. 
@@ -119,13 +119,13 @@ fn main()raises:
 If that was a bit too much, here is a simpler example of a basic multiplication between two tensors and their respective gradient computation.
 
 ```python
-from Infermo import Module, Tensor, shape
+from infermo import Module, Tensor, shape
 
 fn main():
     # init
     var nn = Module()
-    var A = Tensor(shape(5,3))
-    var B = Tensor(shape(3,4))
+    var A = Tensor(shape(2,5,3))
+    var B = Tensor(shape(2,3,4))
 
     # specify tensor entries
     A.setDataAll(2)
@@ -133,7 +133,7 @@ fn main():
 
     # perform computation 
     var C = nn.mul(A,B)
-    var D = nn.sum(C)
+    var D = nn.sum(C) # compute sum, since the gradient can only be computed of a scalar value
     nn.forward(C)
 
     # print result of matrix multiplication
@@ -148,11 +148,12 @@ fn main():
 ## TODO 🚀
 - More basic Operators/Loss-functions/Activations
 - more speedups via Vectorization and Paralleization
+- build a simple Transformer with Infermo
 
 ## Usage
 Make sure you have installed and [configured mojo on your environment](https://docs.modular.com/mojo/manual/get-started/index.html)
 
-If you have problems with the Python integration, follow these steps: https://gist.github.com/trevorhobenshield/6bca58f947ad6115a113a97072df1a73
+If you have problems with the Python integration (i.e. using numpy to read txt file), follow these steps: https://gist.github.com/trevorhobenshield/6bca58f947ad6115a113a97072df1a73
 
 Clone the repository
 ```
@@ -166,7 +167,7 @@ Once this is set up, you can directly try out the MNIST training setup with the 
 ```
 mojo trainMNIST.mojo
 ```
-or the regression task
+or the regression task via
 ```
 mojo regressionTask.mojo
 ```

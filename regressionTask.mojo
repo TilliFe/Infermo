@@ -1,4 +1,4 @@
-from dv import *
+from infermo import *
 from math import sin
 from random import rand, seed
 
@@ -86,4 +86,3 @@ fn main()raises:
             lossSum = 0      
             # logits.printData()
             # model.trueVals.printData()
-            # model.nn.printTensors()
