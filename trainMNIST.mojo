@@ -1,8 +1,5 @@
-from module import Module
-from Tensor import Tensor, shape
-from abstractions import Linear
-from dataLoader import DataLoader
-from indepOps import oneHot, accuracy
+
+from dv import Module, Tensor, shape, Linear, max, accuracy, DataLoader
 
 # define the model and its behaviour
 struct model:
@@ -23,11 +20,11 @@ struct model:
 
         # define model architecture
         var x = Linear(self.nn,self.input, num_neurons=64, addBias=True, activation='ReLU')
-        for i in range(1):
-            x = Linear(self.nn,x, num_neurons=128, addBias=True, activation='ReLU')
+        for i in range(2):
+            x = Linear(self.nn,x, num_neurons=64, addBias=True, activation='ReLU')
         x = Linear(self.nn,x,10,True,'none')
         self.logits = self.nn.softmax(x)
-        self.loss = self.nn.MSE(self.trueVals,self.logits)
+        self.loss = self.nn.CE(self.trueVals,self.logits)
 
     @always_inline     
     fn forward(inout self, _input: DTypePointer[DType.float32], _trueVals: DTypePointer[DType.float32]) -> Tensor:
@@ -40,7 +37,7 @@ struct model:
         self.nn.forward(self.logits)
 
         # some additional ops, not necessary for the training, just for showing the accuracy
-        let oneHots = oneHot(self.logits)
+        let oneHots = max(self.logits)
         self.avgAcc = accuracy(oneHots,self.trueVals)
 
         return self.logits
@@ -51,17 +48,17 @@ struct model:
 
     @always_inline
     fn step(inout self):
-        self.nn.optimize('sgd_momentum', lr = 0.05, momentum = 0.9)
+        self.nn.optimize('sgd_momentum', lr = 0.0001, momentum = 0.9)
 
 
 # train the model
 fn main()raises:
 
     # init
-    var dl = DataLoader('./datasets/mnist.txt')
+    var dl = DataLoader('./dv/datasets/mnist.txt')
     var model = model()
 
-    let num_epochs = 1000
+    let num_epochs = 10000
     var lossSum: Float32 = 0
     var avgAcc: Float32 = 0
     let every = 100
@@ -92,3 +89,8 @@ fn main()raises:
             avgAcc = 0
             # logits.printData()
             # model.trueVals.printData()
+
+
+# fn main():
+#     let t = Tensor(shape(1,2,3))
+#     t.printData()

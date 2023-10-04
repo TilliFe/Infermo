@@ -17,7 +17,7 @@
 Import the necessary parts from Infermo
 
 ```python
-from Infermo import Module, Tensor, shape, Linear, oneHot, accuracy
+from dv import Module, Tensor, shape, Linear, oneHot, accuracy
 ```
 
 Define the model architecture (simple MLP with ReLU activations and biases)
@@ -164,6 +164,9 @@ cd Infermo
 ```
 Once this is set up, you can directly try out the MNIST training setup with the following command
 ```
-mojo Infermo.mojo
+mojo trainMNIST.mojo
 ```
-If you are looking to incorporate Infermo into another file, you should comment out the ```main``` function in the ```Infermo.mojo``` file.
+or the regression task
+```
+mojo regressionTask.mojo
+```

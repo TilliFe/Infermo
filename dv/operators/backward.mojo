@@ -1,6 +1,13 @@
-from Tensor import Tensor
+from memory import memset_zero, memcpy
+from memory.unsafe import Pointer
+from memory import memset_zero, memcpy
+from random import rand
 from runtime.llcl import Runtime
-from algorithm import parallelize, vectorize
+from algorithm import vectorize, parallelize
+from random import rand, random_si64, seed, randint
+from math import sin, cos, log, sqrt, exp
+
+from ..graph.tensor import Tensor
 
 alias nelts = simdwidthof[DType.float32]()
 
@@ -87,16 +94,27 @@ fn sum_grad(B: Tensor, inout A: Tensor):
 
 @always_inline
 fn softmax_grad(B: Tensor, inout A: Tensor):
-    A.setGradient(B.getGradient())
+
+    let num_dims = B.getNum_dims()
+    let M = B.getShape(num_dims-2)
+    let N = B.getShape(num_dims-1)
+    for s in range(M):
+        let offset = s * N
+        for j in range(N):
+            var grad: Float32 = 0
+            for i in range(N):
+                if(i == j):
+                    grad += (B.getGradient(offset + i) - Float32(0.01)) * ( B.getData(offset + j) * (Float32(1) - B.getData(offset + j)) )
+                else:
+                    grad -= (B.getGradient(offset + i) - Float32(0.01))  * B.getData(offset + i) * B.getData(offset + j)
+            A.setGradient(offset + j, grad)
+    # A.setGradient(B.getGradient())
 
 @always_inline
 fn MSE_grad(C: Tensor, inout A: Tensor, inout B: Tensor): # A: TrueVals, B: Logits
     let num_dims = A.getNum_dims()
     let M = A.getShape(num_dims-2)
     let N = A.getShape(num_dims-1)
-    var matrix_size = M*N
-    if(num_dims >= 3):
-        matrix_size = A.getSkips(num_dims-3)
 
     for index in range(A.getCap()):
         let grad = Float32(2) * (B.getData(index) - A.getData(index)) / A.getCap()
@@ -108,14 +126,12 @@ fn CE_grad(C: Tensor, inout A: Tensor, inout B: Tensor): # A: TrueVals, B: Logit
     let num_dims = A.getNum_dims()
     let M = A.getShape(num_dims-2)
     let N = A.getShape(num_dims-1)
-    var matrix_size = M*N
-    if(num_dims >= 3):
-        matrix_size = A.getSkips(num_dims-3)
 
     for index in range(A.getCap()):
-        let grad = (B.getData(index) - A.getData(index)) / A.getCap()
-        A.setGradient(index, grad) 
-        B.setGradient(index, grad) 
+        let grad_A = - log(B.getData(index) + Float32(0.01))
+        let grad_B = - A.getData(index) / (B.getData(index) + Float32(0.01))
+        A.setGradient(index, grad_A) 
+        B.setGradient(index, grad_B) 
 
 @always_inline
 fn reshape_grad(B: Tensor, inout A: Tensor):

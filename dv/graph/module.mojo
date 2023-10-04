@@ -1,8 +1,16 @@
 from memory import memset_zero, memcpy
-from Tensor import Tensor, shape, Vec
-from tensorOps import mul, add, ReLU, sum, softmax, MSE, CE, reshape
-from tensorOpsGradients import mul_grad, add_grad, ReLU_grad, sum_grad, softmax_grad, MSE_grad, CE_grad, reshape_grad
+from memory.unsafe import Pointer
+from memory import memset_zero, memcpy
+from random import rand
 from runtime.llcl import Runtime
+from algorithm import vectorize, parallelize
+from random import rand, random_si64, seed, randint
+from math import sin, cos, log, sqrt, exp
+
+from ..graph.tensor import Tensor
+from ..operators.forward import mul, add, sum, ReLU, softmax, MSE, CE, reshape
+from ..operators.backward import mul_grad, add_grad, sum_grad, ReLU_grad, softmax_grad, MSE_grad, CE_grad, reshape_grad
+from ..helpers.shape import shape, Vec
 
 struct Module:
     var Tensors: DynamicVector[Tensor]
@@ -35,7 +43,7 @@ struct Module:
     # fn tensor(inout self, *s: Int) -> Tensor:
     #     let v = VariadicList[Int](s)
     #     let len = len(v)
-    #     var shape = DynamicVector[Int](0)
+    #      shape = DynamicVector[Int](0)
     #     for i in range(len):
     #         shape.push_back(v[i])
 
@@ -440,5 +448,3 @@ struct Module:
             n.printData()
             n.printGradient()
         print("End of Printing all Tensors of the Computational Graph.")
-
-                    

@@ -1,8 +1,6 @@
-from module import Module
-from Tensor import Tensor, shape
-from abstractions import Linear
-from random import rand, random_si64, seed
+from dv import *
 from math import sin
+from random import rand, seed
 
 # define the model and its behaviour
 struct model:

@@ -1,7 +1,13 @@
-from Tensor import Tensor
+from memory import memset_zero, memcpy
+from memory.unsafe import Pointer
+from memory import memset_zero, memcpy
+from random import rand
 from runtime.llcl import Runtime
 from algorithm import vectorize, parallelize
-from math import exp, log
+from random import rand, random_si64, seed, randint
+from math import sin, cos, log, sqrt, exp
+
+from ..graph.tensor import Tensor
 
 alias nelts = simdwidthof[DType.float32]()
 
@@ -100,10 +106,13 @@ fn MSE(inout C: Tensor, A: Tensor, B: Tensor):
 
 @always_inline
 fn CE(inout C: Tensor, A: Tensor, B: Tensor):
+
+    let num_dims = A.getNum_dims()
+    let M = A.shape[num_dims-2]
     for index in range(A.getCap()):
         let error = -A.getData(index) * log(B.getData(index)) #(A.getData(index) - B.getData(index)) * (A.getData(index) - B.getData(index))
         C.setData(0, C.getData(0) + error)
-    C.setData(0, C.getData(0) / A.getCap())
+    C.setData(0, C.getData(0) / M)
 
 @always_inline
 fn reshape(inout B: Tensor, A: Tensor):

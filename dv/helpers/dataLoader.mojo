@@ -1,11 +1,16 @@
+from memory import memset_zero, memcpy
+from memory.unsafe import Pointer
+from memory import memset_zero, memcpy
+from random import rand
+from runtime.llcl import Runtime
+from algorithm import vectorize, parallelize
+from random import rand, random_si64, seed, randint
+from math import sin, cos, log, sqrt, exp
 from python import Python
-from python.object import PythonObject
-from memory.buffer import Buffer
-from Tensor import shape
-from random import randint, seed
-from memory import memset_zero
-from Tensor import Tensor
 
+from ..graph.tensor import Tensor
+from ..helpers.shape import shape, Vec
+                          
 struct DataLoader:
     var indeces: DTypePointer[DType.int32]
     var data: DTypePointer[DType.float32]
