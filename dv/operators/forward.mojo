@@ -17,10 +17,6 @@ fn mul(inout C: Tensor, A: Tensor, B: Tensor, rt: Runtime):
     var A_matrix_size = A.shape[num_dims-2] * A.shape[num_dims-1]
     var B_matrix_size = B.shape[num_dims-2] * B.shape[num_dims-1]
     var C_matrix_size = C.shape[num_dims-2] * C.shape[num_dims-1]
-    if(num_dims >= 3):
-        A_matrix_size = A.skips[num_dims-3]
-        B_matrix_size = B.skips[num_dims-3]
-        C_matrix_size = C.skips[num_dims-3]
 
     let M = C.shape[num_dims-2]
     let K = A.shape[num_dims-1]
@@ -43,9 +39,7 @@ fn mul(inout C: Tensor, A: Tensor, B: Tensor, rt: Runtime):
 @always_inline
 fn add(inout C: Tensor, A: Tensor, B: Tensor):
     let num_dims = A.getNum_dims()
-    var matrix_size = A.getShape(num_dims-2) * A.getShape(num_dims-1)
-    if(num_dims >= 3):
-        matrix_size = A.getSkips(num_dims-3)
+    let matrix_size = A.getShape(num_dims-2) * A.getShape(num_dims-1)
 
     let M = A.getShape(num_dims-2)
     let N = A.getShape(num_dims-1)
@@ -79,16 +73,14 @@ fn sum(inout B: Tensor, A: Tensor):
 fn softmax(inout B: Tensor, A: Tensor):
     #by default take the softmax along the last dimension of the tensor
     let num_dims = A.getNum_dims()
-    let matrix_size = A.getShape(num_dims-2) * A.getShape(num_dims-1)
-
     let M = A.getShape(num_dims-2)
     let N = A.getShape(num_dims-1)
 
     for i in range(B.getCap()):
         B.data.store(i,exp(A.data.load(i)))
 
-    for s in range(B.getCap() // matrix_size):
-        let offset = s * matrix_size
+    for s in range(B.getCap() // (M*N)):
+        let offset = s * M * N
         for m in range(M):
             var sum : Float32 = 0
             for n in range(N):
@@ -116,4 +108,22 @@ fn CE(inout C: Tensor, A: Tensor, B: Tensor):
 
 @always_inline
 fn reshape(inout B: Tensor, A: Tensor):
-    B.setData(A.getData())
+    for s in range(B.cap // A.cap):
+        let offset = s * A.cap
+        for i in range(A.cap):
+            B.setData(offset + i, A.getData(i))
+
+
+@always_inline
+fn transpose(inout B: Tensor, A: Tensor):
+    # we always tranpose along the last two dimensions of the tensor
+
+    let num_dims = A.getNum_dims()
+    let M = A.getShape(num_dims-2)
+    let N = A.getShape(num_dims-1)
+
+    for s in range(B.getCap() // (M*N)):
+        let offset = s * M * N
+        for i in range(M):
+            for j in range(N):
+                B.setData(offset + j * M + i, A.getData(offset + i * N + j))

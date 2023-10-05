@@ -135,4 +135,20 @@ fn CE_grad(C: Tensor, inout A: Tensor, inout B: Tensor): # A: TrueVals, B: Logit
 
 @always_inline
 fn reshape_grad(B: Tensor, inout A: Tensor):
-    A.setGradient(B.getGradient())
+    for s in range(B.cap // A.cap):
+        let offset = s * A.cap
+        for i in range(A.cap):
+            A.setGradient(i, A.getGradient(i) + B.getGradient(offset + i))
+
+
+@always_inline
+fn transpose_grad(B: Tensor, inout A: Tensor):
+    let num_dims = B.getNum_dims()
+    let M = B.getShape(num_dims-2)
+    let N = B.getShape(num_dims-1)
+
+    for s in range(B.getCap() // (M*N)):
+        let offset = s * M * N
+        for i in range(M):
+            for j in range(N):
+                A.setGradient(offset + j * M + i, B.getGradient(offset + i * N + j))

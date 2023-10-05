@@ -1,4 +1,4 @@
-from infermo import Module, Tensor, shape, Linear, max, accuracy, DataLoader
+from dv import Module, Tensor, shape, Linear, max, accuracy, DataLoader
 
 # define the model and its behaviour
 struct model:

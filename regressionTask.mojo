@@ -1,4 +1,4 @@
-from infermo import *
+from dv import *
 from math import sin
 from random import rand, seed
 

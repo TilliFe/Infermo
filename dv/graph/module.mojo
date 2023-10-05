@@ -8,8 +8,8 @@ from random import rand, random_si64, seed, randint
 from math import sin, cos, log, sqrt, exp
 
 from ..graph.tensor import Tensor
-from ..operators.forward import mul, add, sum, ReLU, softmax, MSE, CE, reshape
-from ..operators.backward import mul_grad, add_grad, sum_grad, ReLU_grad, softmax_grad, MSE_grad, CE_grad, reshape_grad
+from ..operators.forward import mul, add, sum, ReLU, softmax, MSE, CE, reshape, transpose
+from ..operators.backward import mul_grad, add_grad, sum_grad, ReLU_grad, softmax_grad, MSE_grad, CE_grad, reshape_grad, transpose_grad
 from ..helpers.shape import shape, Vec
 
 struct Module:
@@ -127,7 +127,7 @@ struct Module:
             print("Error (at add): number of dimensions are not equal")
         let num_dims = A.getNum_dims()
         if(A.getShape(num_dims-2) != B.getShape(num_dims-2) or A.getShape(num_dims-1) != B.getShape(num_dims-1)):
-            print("Error (at add): For Matrix ADdition, Matrices need to in the following shape: C[mxn] = A[mxn] + B[mxn]")
+            print("Error (at add): For Matrix Addition, Matrices need to in the following shape: C[mxn] = A[mxn] + B[mxn]")
 
         # init result Tensor 
         var new_shape = DynamicVector[Int]()
@@ -246,10 +246,10 @@ struct Module:
 
         # check dimensions
         if(A.getNum_dims() != B.getNum_dims()):
-            print("Error (at MSE): number of dimensions are not equal")
+            print("Error (at CE): number of dimensions are not equal")
         let num_dims = A.getNum_dims()
         if(A.getShape(num_dims-2) != B.getShape(num_dims-2) or A.getShape(num_dims-1) != B.getShape(num_dims-1)):
-            print("Error (at MSE): For MSE computation, Matrices need to in the following shape: C[mxn] = (A[mxn] - B[mxn])^2")
+            print("Error (at CE): For CE computation, Matrices need to in the following shape: C[mxn] = op(A[mxn],B[mxn])")
 
         # init result Tensor 
         var new_shape = DynamicVector[Int]()
@@ -275,15 +275,16 @@ struct Module:
         return C 
 
     @always_inline
-    fn reshape(inout self, inout A: Tensor, dir: Int) -> Tensor: 
-        if(dir != -1):
-            print("Error (at reshape)!")
-        var new_shape = DynamicVector[Int](0)
-        new_shape.push_back(A.getShape(0))
-        new_shape.push_back(1)
-        for i in range(1, A.getNum_dims()):
-            new_shape[1] *= A.getShape(i)
+    fn reshape(inout self, inout A: Tensor, newShape: DynamicVector[Int]) -> Tensor: # also braodcastv
+        let num_dims = len(newShape)
+        var new_shape = DynamicVector[Int]()
+        for i in range(num_dims):
+            new_shape.push_back(newShape[i])
+
         var B = Tensor(new_shape)
+
+        if(B.cap % A.cap != 0):
+            print("Error (at reshape): B.cap % A.cap == 0 and B.cap // A.cap >= 1 is not fulfilled")
 
         B.setName('reshape')
 
@@ -297,11 +298,20 @@ struct Module:
         return B
 
     @always_inline
-    fn reshape(inout self, inout A: Tensor, newShape: DynamicVector[Int]) -> Tensor: 
-        var B = Tensor(newShape)
-        B.setData(A.getData())
+    fn transpose(inout self, inout A: Tensor) -> Tensor: 
+        let num_dims = A.getNum_dims()
+        if(num_dims < 2):
+            print("Error (at transpose): A transposed Tensor need to heave at least two dimenions!")
 
-        B.setName('reshape')
+        var new_shape = DynamicVector[Int]()
+        for i in range(num_dims - 2):
+            new_shape.push_back(A.getShape(i))
+        new_shape.push_back(A.getShape(num_dims-1))
+        new_shape.push_back(A.getShape(num_dims-2))
+
+        var B = Tensor(new_shape)
+
+        B.setName('transpose')
 
         if(not A.getInTensors()):
             B.addParent(self.counter)
@@ -309,9 +319,6 @@ struct Module:
         else:
             B.addParent(A.getId())
         self.addTensor(B)
-
-        if(A.getCap() != B.getCap()):
-            print("Error (at reshape): The Product of the dimensions in shapes must be the same!")
 
         return B
 
@@ -365,6 +372,9 @@ struct Module:
             if(curr.getName() == 'reshape'):
                 let par1 = self.Tensors[curr.getParent(0)]
                 reshape(curr,par1)
+            if(curr.getName() == 'transpose'):
+                let par1 = self.Tensors[curr.getParent(0)]
+                transpose(curr,par1)
 
     fn backwardOrder(inout self, Tensor: Tensor):
         self.backwardTape = DynamicVector[Int](0)
@@ -422,6 +432,9 @@ struct Module:
             if(curr.getName() == 'reshape'):
                 var par1 = self.Tensors[curr.getParent(0)]
                 reshape_grad(curr,par1)
+            if(curr.getName() == 'transpose'):
+                var par1 = self.Tensors[curr.getParent(0)]
+                transpose_grad(curr,par1)
 
     fn optimize(inout self, optType: String, lr: Float32 = 0.001, momentum: Float32 = 0.9):
         

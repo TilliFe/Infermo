@@ -1,14 +1,45 @@
 # Infermo🔥
 
-### AutoDiff with Tensors in a thousand lines of pure Mojo code!
+### AutoDiff with Tensors in pure Mojo!
 
-**Heads up**: Infermo, as a Differentiable Programming Engine, is currently in its proof-of-concept stage and is not fully operational yet. It will be ready for some basic tests in a couple of days. 
+**Heads up**: Infermo, as a Differentiable Programming Engine, is currently in its proof-of-concept stage and is not fully operational yet. 
 
 ## Features
 
 - **No External Libraries**: Infermo is built entirely in Mojo, without the use of any external libraries written in other languages like C++ or Python.
-- **Easy Model Definition**: Define your models dynamically in an object oriented way just like in Pytorch. Train Neural Network on classification and regression tasks.
-- **Automatic Differentiation**: Compute gradients automatically
+- **Easy Model Definition**: Define your models dynamically in an object-oriented way just like in Pytorch. Train Neural Networks on classification and regression tasks.
+- **Automatic Differentiation**: Compute gradients automatically.
+
+###
+![Alt text](image-1.png)
+
+## Overview
+
+**Structs**:
+- **Tensor**: A Tensor is a multidimensional array. It is either a separate data holder or part of a computation graph (see Module).
+- **Module**: The Module is the Computation Graph and stores the relations between the Tensors (nodes).
+- **DataLoader**: The DataLoader reads in data from a .txt file (.csv coming soon). The read-in data is stored in a buffer. Batches of data get generated based on the specified sub-rows and sub-columns.
+
+**Tensor methods**:
+- **initialization**: Via the shape(*Ints) function, e.g., 'var new_tensor = Tensor(shape(2,3,4))'
+- **getData(index: Int)**: Returns the element at the index position. Attention: Does not take the shape of the Tensor into consideration.
+- **setData(index: Int, value: Float32)**: Sets the entry at the index position.
+- **setData(new_data: DTypeFloat32[DType.float32])**: If the capacities of the Tensors data and new_data are the same, the data in the Tensor gets efficiently replaced by new_data.
+- **etc.** (We recommend checking out the Tensor struct in the graph directory)
+
+**Module Operators**:
+Operators include mul, add, sum, ReLU, softmax, reshape (broadcast), MSE, CE, transpose. Each operator takes one or two Tensors and performs a specific operation. For more details on each operator, please refer to the source code. \
+*Important:* First, an object of type Module needs to be initialized, like so: 'var nn = Module()'. Then we can call the methods for example as follows: 'var res = nn.mul(tensor1,tensor2).
+- **forward(last_node: Tensor)**: Takes in one Tensor, computes one forward pass through the Network till the specified Tensor (compute node). Returns none.
+- **backward(last_node: Tensor)**: Takes in one Tensor, computes the gradients of the last Tensor (here: last_node) with respect to all prior Tensors (compute nodes). Returns none.
+- **optimize("optimization_algorithm",learning_rate,momentum)**: Optimizes the entire network where the gradients are known. Returns none.
+
+**Abstractions**:
+- Linear: A linear Transformation with a ReLU activation, used for a simple MLP.
+- Transformer: Implements a simple encoder neural network like GPT. Still work in progress.
+
+A more detailed overview is on its way. Stay tuned! 😊
+
 
 ## Example Code
 
@@ -45,7 +76,7 @@ struct model:
             x = Linear(self.nn,x, num_neurons=64, addBias=True, activation='ReLU')
         x = Linear(self.nn,x,10,True,'none')
         self.logits = self.nn.softmax(x)
-        self.loss = self.nn.MSE(self.trueVals,self.logits)
+        self.loss = self.nn.CE(self.trueVals,self.logits)
 
     @always_inline     
     fn forward(inout self, _input: DTypePointer[DType.float32], _trueVals: DTypePointer[DType.float32]) -> Tensor:

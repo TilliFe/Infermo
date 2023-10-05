@@ -78,3 +78,48 @@ fn accuracy(logits: Tensor, trueVals: Tensor) -> Float32:
         if( logits.getData(i) == Float32(1.0) and trueVals.getData(i) == Float32(1.0) ):
             avgAcc += 1
     return avgAcc / M
+
+@always_inline
+fn scale(inout nn: Module, inout A: Tensor, scalar: Float32) -> Tensor:
+    let num_dims = A.getNum_dims() 
+    let N = A.getShape(num_dims-1)
+    var new_shape = DynamicVector[Int]()
+    for i in range(num_dims-1):
+        new_shape.push_back(A.getShape(i))
+    new_shape.push_back(N)
+
+    var S = Tensor(new_shape)
+    for s in range(A.cap // (N*N)):
+        for i in range(N):
+            S.setData(s*N*N + i*N+i, scalar)
+    S.requiresGradient = False
+
+    return nn.mul(A,S)
+
+@always_inline
+fn mask(inout nn: Module, inout A: Tensor, l_value: Float32 = 0.0, u_value: Float32 = 1.0, dim: Int = 0) -> Tensor:
+
+    let num_dims = A.getNum_dims()
+    var new_shape = DynamicVector[Int]()
+    let M = A.getShape(A.num_dims-2)
+    let N = A.getShape(A.num_dims-1)
+
+    for i in range(num_dims):
+        new_shape.push_back(A.getShape(i))
+    # new_shape[num_dims - 2] = N
+
+    var Mask = Tensor(new_shape)
+
+    for s in range(A.getCap() // (M*N)):
+        let offset = s * N * N
+
+        for i in range(M):
+            for j in range(N):
+                if(j >= i + dim):
+                    Mask.setData(offset + i * N + j, u_value)
+                else:
+                    Mask.setData(offset + i * N + j, l_value)
+
+    Mask.requiresGradient = False
+
+    return nn.add(A,Mask)

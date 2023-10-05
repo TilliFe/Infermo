@@ -27,6 +27,7 @@ struct Tensor:
     var inTensors: Bool
     var visited: Bool
     var requiresGradient: Bool
+    var otherParams: Pointer[Int]
 
     fn __init__(_shape: DynamicVector[Int]) -> Self:
         let _num_dims = len(_shape)
@@ -59,6 +60,9 @@ struct Tensor:
 
         let name = StringRef('none')
 
+        let otherParams = Pointer[Int].alloc(64)
+        memset_zero(otherParams, 64)
+
         return Tensor{
             id: 1,
             name: name,
@@ -73,7 +77,8 @@ struct Tensor:
             num_parents: num_parents,
             inTensors: False,
             visited: False,
-            requiresGradient: True
+            requiresGradient: True,
+            otherParams: otherParams
         }
 
     @always_inline
