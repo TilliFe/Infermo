@@ -11,7 +11,7 @@
 - **Automatic Differentiation**: Compute gradients automatically.
 
 ###
-![Alt text](image-1.png)
+![Alt text](image.png)
 
 ## Overview
 
