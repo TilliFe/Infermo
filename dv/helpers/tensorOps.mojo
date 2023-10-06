@@ -77,7 +77,7 @@ fn accuracy(logits: Tensor, trueVals: Tensor) -> Float32:
     for i in range(trueVals.getCap()):
         if( logits.getData(i) == Float32(1.0) and trueVals.getData(i) == Float32(1.0) ):
             avgAcc += 1
-    return avgAcc / M
+    return avgAcc / (Float32(logits.cap) / N)
 
 @always_inline
 fn scale(inout nn: Module, inout A: Tensor, scalar: Float32) -> Tensor:

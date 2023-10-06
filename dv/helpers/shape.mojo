@@ -16,8 +16,6 @@ fn shape(*_shape: Int) -> DynamicVector[Int]:
     let v = VariadicList[Int](_shape)
     let len = len(v)
     var shape = DynamicVector[Int](0)
-    if(len == 1):
-        shape.push_back(1)
     for i in range(len):
         shape.push_back(v[i])
     return shape

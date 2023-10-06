@@ -86,20 +86,34 @@ struct Module:
     @always_inline
     fn mul(inout self, inout A: Tensor, inout B: Tensor) -> Tensor:
 
-        # check dimensions
-        if(A.getNum_dims() != B.getNum_dims()):
-            print("Error (a mul): number of dimensions are not equal")
-        if(A.getNum_dims() < 2):
-            print("Error (at mul): Tensors must be of shape at least 2, in order to perform matrix multiplication")
-        let num_dims = A.getNum_dims()
-        if(A.getShape(num_dims-1) != B.getShape(num_dims-2)):
+        # # check dimensions
+        let A_num_dims = A.getNum_dims()
+        let B_num_dims = B.getNum_dims()
+        if(A.getShape(A_num_dims-1) != B.getShape(B_num_dims-2)):
             print("Error (at mul): For Matrix Multiplication, Matrices need to in the following shape: C[mxn] = A[mxk] * B[kxn]")
 
         # init result Tensor 
         var new_shape = DynamicVector[Int](0)
-        for i in range(num_dims-1):
-            new_shape.push_back(A.shape[i])
-        new_shape.push_back(B.shape[num_dims-1])
+        
+        # regular
+        if(A_num_dims == B_num_dims):
+            for i in range(B_num_dims-1):
+                new_shape.push_back(A.shape[i])
+            new_shape.push_back(B.shape[B_num_dims-1])
+
+        # broadcast A
+        elif(B_num_dims > A_num_dims):
+            for i in range(B_num_dims-2):
+                new_shape.push_back(B.shape[i])
+            new_shape.push_back(A.shape[A_num_dims-2])
+            new_shape.push_back(B.shape[B_num_dims-1])
+
+        # broadcast B 
+        elif(A_num_dims > B_num_dims):
+            for i in range(A_num_dims-1):
+                new_shape.push_back(A.shape[i])
+            new_shape.push_back(B.shape[B_num_dims-1])        
+
         var C = Tensor(new_shape)
 
         C.setName('mul')
@@ -122,17 +136,29 @@ struct Module:
     @always_inline
     fn add(inout self, inout A: Tensor, inout B: Tensor) -> Tensor:
 
-        # check dimensions
-        if(A.getNum_dims() != B.getNum_dims()):
-            print("Error (at add): number of dimensions are not equal")
-        let num_dims = A.getNum_dims()
-        if(A.getShape(num_dims-2) != B.getShape(num_dims-2) or A.getShape(num_dims-1) != B.getShape(num_dims-1)):
-            print("Error (at add): For Matrix Addition, Matrices need to in the following shape: C[mxn] = A[mxn] + B[mxn]")
+        let A_num_dims = A.getNum_dims()
+        let B_num_dims = B.getNum_dims()
+        # if(A.getShape(A_num_dims-2) != B.getShape(B_num_dims-2) or A.getShape(A_num_dims-1) != B.getShape(B_num_dims-1)):
+        #     print("Error (at add): For Matrix Addition, Matrices need to in the following shape: C[mxn] = A[mxn] + B[mxn]")
 
         # init result Tensor 
-        var new_shape = DynamicVector[Int]()
-        for i in range(num_dims):
-            new_shape.push_back(A.getShape(i))
+        var new_shape = DynamicVector[Int](0)
+        
+        # regular
+        if(A_num_dims == B_num_dims):
+            for i in range(B_num_dims):
+                new_shape.push_back(A.shape[i])
+
+        # broadcast A
+        elif(B_num_dims > A_num_dims):
+            for i in range(B_num_dims):
+                new_shape.push_back(B.shape[i])
+
+        # broadcast B 
+        elif(A_num_dims > B_num_dims):
+            for i in range(A_num_dims):
+                new_shape.push_back(A.shape[i])  
+
         var C = Tensor(new_shape)
 
         C.setName('add')
@@ -258,6 +284,10 @@ struct Module:
         var C = Tensor(shape(1))
 
         C.setName('CE')
+        if(A.name == "softmax"):
+            A.otherParams.store(0,3001) # 3001 means that the child is CE node -> simplify gradient computation
+        if(B.name == "softmax"):
+            B.otherParams.store(0,3001)
 
         if(not A.getInTensors()):
             C.addParent(self.counter)
@@ -346,8 +376,7 @@ struct Module:
             if(curr.getName() == 'mul'):
                 let par1 = self.Tensors[curr.getParent(0)]
                 let par2 = self.Tensors[curr.getParent(1)]
-                with Runtime() as rt:
-                    mul(curr,par1,par2,rt)
+                mul(curr,par1,par2)
             if(curr.getName() == 'add'):
                 let par1 = self.Tensors[curr.getParent(0)]
                 let par2 = self.Tensors[curr.getParent(1)]
@@ -406,8 +435,7 @@ struct Module:
             if(curr.getName() == 'mul'):
                 var par1 = self.Tensors[curr.getParent(0)]
                 var par2 = self.Tensors[curr.getParent(1)]
-                with Runtime() as rt:
-                    mul_grad(curr,par1,par2,rt)
+                mul_grad(curr,par1,par2)
             if(curr.getName() == 'add'):
                 var par1 = self.Tensors[curr.getParent(0)]
                 var par2 = self.Tensors[curr.getParent(1)]
