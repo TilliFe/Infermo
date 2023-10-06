@@ -2,7 +2,7 @@
 
 ### AutoDiff with Tensors in pure Mojo!
 
-**Heads up**: Infermo, as a Differentiable Programming Engine, is currently in its proof-of-concept stage and is not fully operational yet. 
+#### *New*: Implemention of a GPT-Style **Transformer**: Functional, Yet Under Optimization 🔧⚙️🚀
 
 ## Features
 
@@ -36,7 +36,7 @@ Operators include mul, add, sum, ReLU, softmax, reshape (broadcast), MSE, CE, tr
 
 **Abstractions**:
 - Linear: A linear Transformation with a ReLU activation, used for a simple MLP.
-- Transformer: Implements a simple encoder neural network like GPT. Still work in progress.
+- Transformer: Implements a simple encoder neural network like GPT. We tested it on a small algorithmic dataset (bitshifting).
 
 A more detailed overview is on its way. Stay tuned! 😊
 

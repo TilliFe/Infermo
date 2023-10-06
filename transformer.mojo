@@ -1,124 +1,6 @@
 from dv import *
-from math import sqrt
 from random import random_float64, seed
 from memory import memset_zero
-
-@always_inline
-fn Embed(inout nn: Module, d_vocab: Int, d_model: Int, batch_size: Int, inout x: Tensor) -> Tensor:
-    var W_E_raw = Tensor(shape(d_vocab,d_model))
-    W_E_raw.initRandomHe()
-    var W_E = nn.reshape(W_E_raw, shape(batch_size,d_vocab,d_model))
-    return nn.mul(x,W_E)
-
-@always_inline
-fn Unembed(inout nn: Module, d_vocab: Int, d_model: Int, batch_size: Int, inout x: Tensor) -> Tensor:
-    var W_U_raw = Tensor(shape(d_model,d_vocab))
-    W_U_raw.initRandomHe()
-    var W_U = nn.reshape(W_U_raw,shape(batch_size,d_model,d_vocab))
-    return nn.mul(x, W_U)
-
-@always_inline
-fn PosEmbed(inout nn: Module, max_ctx: Int, d_model: Int, batch_size: Int, inout x: Tensor) -> Tensor:
-    var W_pos_raw = Tensor(shape(max_ctx,d_model))
-    W_pos_raw.initRandomHe()
-    var W_pos = nn.reshape(W_pos_raw,shape(batch_size,max_ctx,d_model))
-    return nn.mul(W_pos, x)
-
-@always_inline
-fn Attention(inout nn: Module, d_model: Int, num_heads: Int, d_head: Int, n_ctx: Int, batch_size: Int, seq_len: Int, inout x: Tensor) -> Tensor:
-    
-    # init    
-    var x_t_unreshaped = nn.transpose(x)
-    var x_t = nn.reshape(x_t_unreshaped,shape(batch_size,num_heads,d_model,seq_len))
-    var W_K = Tensor(shape(num_heads, d_head, d_model))
-    var W_Q = Tensor(shape(num_heads, d_head, d_model))
-    var W_V = Tensor(shape(num_heads, d_head, d_model))
-    var W_O = Tensor(shape(num_heads*d_head, d_model))
-    W_K.initRandomHe()
-    W_Q.initRandomHe() 
-    W_V.initRandomHe()
-    W_O.initRandomHe()  
-
-    # attention heads
-    var k = nn.mul(W_K,x_t)     # batch_size,num_heads,d_head,seq_len
-    var q = nn.mul(W_Q,x_t)     # batch_size,num_heads,d_head,seq_len
-    var v = nn.mul(W_V,x_t)     # batch_size,num_heads,d_head,seq_len
-    var k_t = nn.transpose(k)   # batch_size,num_heads,seq_len,d_head
-
-    x = nn.mul(k_t,q)           # batch_size,num_heads,seq_len,seq_len
-    x = mask(nn, x, 0.0, -1000000.0, 1) 
-    x = scale(nn, x, Float32(1.0)/Float32(d_head))
-    x = nn.softmax(x)           # batch_size,num_heads,seq_len,seq_len
-    x = nn.mul(v,x)             # batch_size,num_heads,d_head,seq_len
-
-    # concatenate results of all heads
-    x = nn.reshape(x,shape(batch_size, num_heads * d_head, seq_len)) 
-    x = nn.transpose(x)     	# batch_size,seq_len,num_heads*d_head
-    
-    x = nn.mul(x,W_O)           # batch_size, seq_len, d_model
-
-    return x
-
-
-fn MLP(inout nn: Module, d_model: Int, d_mlp: Int, batch_size: Int, seq_len: Int, inout x: Tensor) -> Tensor:
-
-    # init
-    var x_t = nn.transpose(x) # shape: batch_size,d_model,seq_len
-
-    var W_in = Tensor(shape(d_mlp,d_model))
-    W_in.initRandomHe()
-
-    var b_in_flat = Tensor(shape(d_mlp,1))
-    b_in_flat.setDataAll(0.0)
-    var ones_in = Tensor(shape(1,seq_len))
-    ones_in.setDataAll(1)
-    ones_in.requiresGradient = False
-    var b_in = nn.mul(b_in_flat,ones_in)
-
-    var W_out = Tensor(shape(d_model,d_mlp))
-    W_out.initRandomHe()
-
-    var b_out_flat = Tensor(shape(d_model,1))
-    b_out_flat.setDataAll(0.0)
-    var ones_out = Tensor(shape(1,seq_len))
-    ones_out.setDataAll(1)
-    ones_out.requiresGradient = False
-    var b_out = nn.mul(b_out_flat,ones_out)
-
-    # architecture
-    x = nn.mul(W_in, x_t)     # batch_size,d_mlp,seq_len
-    x = nn.add(x,b_in)        # batch_size,d_mlp,seq_len
-    x = nn.ReLU(x)            # batch_size,d_mlp,seq_len
-    x = nn.mul(W_out,x)       # batch_size,d_model,seq_len
-    x = nn.add(x,b_out)       # batch_size,d_model,seq_len
-    x = nn.transpose(x)       # batch_size,seq_len,d_model = shape(input)
-
-    return x
-
-
-fn TransformerBlock(inout nn: Module, d_model: Int, num_heads: Int, d_head: Int, n_ctx: Int, d_mlp: Int, batch_size: Int, seq_len: Int, use_attn: Bool, use_mlp: Bool, inout x: Tensor) -> Tensor:
-    var res_stream = x
-    if(use_attn):
-        x = Attention(
-            nn=nn,
-            d_model=d_model,
-            num_heads=num_heads,
-            d_head=d_head,
-            n_ctx=seq_len,
-            batch_size=batch_size,
-            seq_len=seq_len,
-            x=x
-        )
-    if(use_mlp):
-        x = MLP(
-            nn=nn,
-            d_model=d_model,
-            d_mlp=d_mlp,
-            batch_size=batch_size,
-            seq_len=seq_len,
-            x=x
-        )
-    return nn.add(res_stream,x)
 
 # simple algorithmic dataset reversing the sequence
 fn dataGenerator(inout inputs: Tensor, inout trueVals: Tensor, batch_size: Int, seq_len: Int, d_vocab: Int, ):
@@ -154,15 +36,12 @@ fn dataGenerator(inout inputs: Tensor, inout trueVals: Tensor, batch_size: Int, 
 
 fn main():
 
-    # init
-    var nn = Module()
-
     # transformer config
-    let d_model=32
-    let d_vocab=d_model
+    let d_model=64
+    let d_vocab=8
     let num_heads=4
     let d_head=d_model//num_heads
-    let n_ctx=8
+    let n_ctx=4
     let d_mlp=128
     let batch_size=16
     let seq_len=n_ctx
@@ -171,53 +50,65 @@ fn main():
     let use_mlp=True
 
     # training config
-    let num_epochs = 10000
+    let num_epochs = 1000
     let every = 100
-    let lr = 0.0001
+    let lr = 0.001
     let momentum = 0.9
+    let wd = 0.1
 
-    # init dataset 
+    # init
+    var nn = Module()
     var inputs = Tensor(shape(batch_size,seq_len,d_vocab))
+    inputs.requiresGradient = False
     var trueVals = Tensor(shape(batch_size,seq_len,d_vocab))
+    trueVals.requiresGradient = False
     
-    # fill inputs and trueVals with a batch of data
-    dataGenerator(inputs,trueVals,batch_size,seq_len,d_vocab)
-
-    # architecture of a 1 layer Transformer
-    # var x = Embed(nn,d_vocab,d_model,batch_size,inputs)
-    # for layer in range(num_layers):
-    var x = TransformerBlock(
-        nn=nn,
-        d_model=d_model,
-        num_heads=num_heads,
-        d_head=d_head,
-        n_ctx=n_ctx,
-        d_mlp=d_mlp,
-        batch_size=batch_size,
-        seq_len=seq_len,
-        use_attn=use_attn,
-        use_mlp=use_mlp,
-        x=inputs
-    )  
-    # x = Unembed(nn,d_vocab,d_model,batch_size,x)  
-    x = nn.softmax(x)
-    var loss = nn.CE(trueVals,x)
+    # architecture of a n layer Transformer
+    var x = Embed(nn,d_vocab,d_model,batch_size,inputs)
+    for layer in range(num_layers):
+        x = TransformerBlock(
+            nn=nn,
+            d_model=d_model,
+            num_heads=num_heads,
+            d_head=d_head,
+            n_ctx=n_ctx,
+            d_mlp=d_mlp,
+            batch_size=batch_size,
+            seq_len=seq_len,
+            use_attn=use_attn,
+            use_mlp=use_mlp,
+            x=x
+        )  
+    x = Unembed(nn,d_vocab,d_model,batch_size,x)  
+    var logits = nn.softmax(x)
+    var loss = nn.CE(trueVals,logits)
 
     # training loop
+    var avgAcc: Float32 = 0.0
+    var avgLoss: Float32 = 0.0
+
     for epoch in range(1,num_epochs+1):
 
-        # # fill inputs and trueVals with a batch of data - does not work yet
-        # dataGenerator(inputs,trueVals,batch_size,seq_len,d_vocab)
+        # fill inputs and trueVals with a batch of data
+        dataGenerator(inputs,trueVals,batch_size,seq_len,d_vocab)
 
         # forward pass through the network
         nn.forward(loss)
+
+        # print out stuff, not important to the learning procedure
+        let res = max(logits)
+        avgAcc += accuracy(res,trueVals)
+        avgLoss += loss.getData(0)
         if(epoch % every == 0):
-            print("Epoch:",epoch, " Loss:", loss.getData(0))
+            print("Epoch:",epoch, ", Loss:", avgLoss/every, ", avgAcc:", avgAcc/every)
+            avgAcc = 0.0
+            avgLoss = 0.0
+            # res.printData()
+            # trueVals.printData()
         
         # compute gradients
         nn.backward(loss)
 
         # take a optimization step
-        nn.optimize('sgd_momentum', lr = lr, momentum = momentum)
+        nn.optimize('sgd_momentum', lr = lr, momentum = momentum, weight_decay=wd)
     
-    # nn.printTensors()

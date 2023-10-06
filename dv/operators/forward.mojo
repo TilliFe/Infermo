@@ -142,13 +142,15 @@ fn MSE(inout C: Tensor, A: Tensor, B: Tensor):
 
 @always_inline
 fn CE(inout C: Tensor, A: Tensor, B: Tensor):
-
     let num_dims = A.getNum_dims()
-    let M = A.shape[num_dims-2]
+    let N = A.shape[num_dims-1]
+    let epsilon = Float32(1e-8)
     for index in range(A.getCap()):
-        let error = -A.getData(index) * log(B.getData(index)) #(A.getData(index) - B.getData(index)) * (A.getData(index) - B.getData(index))
-        C.setData(0, C.getData(0) + error)
-    C.setData(0, C.getData(0) / M)
+        if(B.getData(index) > Float32(0.0001)):
+            let error = -A.getData(index) * log(B.getData(index) + epsilon)
+            C.setData(0, C.getData(0) + error)
+    C.setData(0, C.getData(0) / (Float32(A.getCap()) / N))
+
 
 @always_inline
 fn reshape(inout B: Tensor, A: Tensor):
@@ -160,6 +162,7 @@ fn reshape(inout B: Tensor, A: Tensor):
 
 @always_inline
 fn transpose(inout B: Tensor, A: Tensor):
+    
     # we always tranpose along the last two dimensions of the tensor
 
     let num_dims = A.getNum_dims()

@@ -6,4 +6,4 @@ from .operators.backward import mul_grad, add_grad, sum_grad, ReLU_grad, softmax
 
 from .helpers.dataLoader import DataLoader
 from .helpers.shape import shape, Vec
-from .helpers.tensorOps import Linear, max, accuracy, mask, scale
+from .helpers.tensorOps import Linear, max, accuracy, mask, scale, Embed, PosEmbed, Unembed, Attention, MLP, TransformerBlock

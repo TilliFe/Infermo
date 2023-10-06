@@ -464,20 +464,20 @@ struct Module:
                 var par1 = self.Tensors[curr.getParent(0)]
                 transpose_grad(curr,par1)
 
-    fn optimize(inout self, optType: String, lr: Float32 = 0.001, momentum: Float32 = 0.9):
+    fn optimize(inout self, optType: String, lr: Float32 = 0.001, momentum: Float32 = 0.9, weight_decay: Float32 = 0.001):
         
         if(optType == "sgd"):
             for i in range(len(self.backwardTape)):
                 let id = self.Tensors[self.backwardTape[i]].id
                 for index in range(self.Tensors[id].getCap()):
-                    self.Tensors[id].setData(index, self.Tensors[id].getData(index) - lr * self.Tensors[id].getGradient(index))
+                    self.Tensors[id].setData(index, (1 - lr * weight_decay) * self.Tensors[id].getData(index) - lr * self.Tensors[id].getGradient(index))
         
         if(optType == "sgd_momentum"):
             for i in range(len(self.backwardTape)):
                 let id = self.Tensors[self.backwardTape[i]].id
                 for index in range(self.Tensors[id].getCap()):
                     self.Tensors[id].setVelocity(index, momentum * self.Tensors[id].getVelocity(index) + lr * self.Tensors[id].getGradient(index))
-                    self.Tensors[id].setData(index, self.Tensors[id].getData(index) - self.Tensors[id].getVelocity(index))
+                    self.Tensors[id].setData(index, (1 - lr * weight_decay) * self.Tensors[id].getData(index) - self.Tensors[id].getVelocity(index))
 
 
     @always_inline

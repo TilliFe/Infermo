@@ -164,25 +164,26 @@ fn MSE_grad(C: Tensor, inout A: Tensor, inout B: Tensor): # A: TrueVals, B: Logi
 @always_inline
 fn CE_grad(C: Tensor, inout A: Tensor, inout B: Tensor): # A: TrueVals, B: Logits
     let num_dims = A.getNum_dims()
-    let M = A.getShape(num_dims-2)
     let N = A.getShape(num_dims-1)
 
-    if(A.name == "softmax" and A.requiresGradient):
-        for index in range(A.getCap()):
-            let grad = (B.getData(index) - A.getData(index)) 
-            A.setGradient(index, grad)
-    if(B.name == "softmax" and B.requiresGradient):
-        for index in range(A.getCap()):
-            let grad = (B.getData(index) - A.getData(index)) 
-            B.setGradient(index, grad)
-    else:   
-        for index in range(A.getCap()):
-            let grad_A = - log(B.getData(index))
-            let grad_B = - A.getData(index) / (B.getData(index))
-            if(A.requiresGradient):
-                A.setGradient(index, grad_A) 
-            if(B.requiresGradient):
-                B.setGradient(index, grad_B) 
+    if(A.requiresGradient):
+        if(A.name == "softmax"):
+            for index in range(A.getCap()):
+                let grad = (B.getData(index) - A.getData(index)) 
+                A.setGradient(index, grad /  (Float32(A.getCap()) / N))
+            else:
+                for index in range(A.getCap()):
+                    let grad_A = - log(B.getData(index))
+                    A.setGradient(index, grad_A / (Float32(A.getCap()) / N)) 
+    if(B.requiresGradient):
+        if(B.name == "softmax"):
+            for index in range(A.getCap()):
+                let grad = (B.getData(index) - A.getData(index)) 
+                B.setGradient(index, grad /  (Float32(A.getCap()) / N))
+        else:
+            for index in range(A.getCap()):
+                let grad_B = - A.getData(index) / (B.getData(index))
+                B.setGradient(index, grad_B / (Float32(A.getCap()) / N)) 
 
 @always_inline
 fn reshape_grad(B: Tensor, inout A: Tensor):
