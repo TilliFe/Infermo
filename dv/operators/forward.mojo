@@ -38,20 +38,13 @@ fn mul(inout C: Tensor, A: Tensor, B: Tensor, rt: Runtime):
 
 @always_inline
 fn add(inout C: Tensor, A: Tensor, B: Tensor):
-    let num_dims = A.getNum_dims()
-    let matrix_size = A.getShape(num_dims-2) * A.getShape(num_dims-1)
+    @parameter
+    fn v_add[nelts: Int](i: Int):
+        C.data.simd_store[nelts](
+            i, A.data.simd_load[nelts](i) + B.data.simd_load[nelts](i)
+        )
 
-    let M = A.getShape(num_dims-2)
-    let N = A.getShape(num_dims-1)
-
-    if(C.getCap() > nelts):
-        for i in range(0,C.getCap() - (nelts), nelts):
-            C.data.simd_store[nelts](i, A.data.simd_load[nelts](i) + B.data.simd_load[nelts](i))
-        for i in range(C.getCap() - nelts, C.getCap()):
-            C.data.store(i, A.data.load(i) + B.data.load(i))
-    else:
-        for i in range(C.getCap()):
-            C.data.store(i, A.data.load(i) + B.data.load(i))
+    vectorize[nelts, v_add](C.getCap())
 
 @always_inline
 fn ReLU(inout B: Tensor, A: Tensor):
