@@ -5,7 +5,7 @@ from random import rand
 from runtime.llcl import Runtime
 from algorithm import vectorize, parallelize
 from random import rand, random_si64, seed, randint
-from math import sin, cos, log, sqrt, exp
+from math import sin, cos, log, sqrt, exp, min, max
 
 from ..graph.tensor import Tensor
 from ..operators.forward import mul, add, sum, ReLU, softmax, MSE, CE, reshape, transpose
@@ -465,19 +465,19 @@ struct Module:
                 transpose_grad(curr,par1)
 
 
-    fn optimize(inout self, optType: String, lr: Float32 = 0.001, momentum: Float32 = 0.9, weight_decay: Float32 = 0.001):
+    fn optimize(inout self, optType: String, lr: Float32 = 0.001, momentum: Float32 = 0.9, weight_decay: Float32 = 0.001, threshold: Float32 = Float32(100.0)):
         
         if(optType == "sgd"):
             for i in range(len(self.backwardTape)):
                 let id = self.Tensors[self.backwardTape[i]].id
                 for index in range(self.Tensors[id].getCap()):
-                    self.Tensors[id].setData(index, (1 - lr * weight_decay) * self.Tensors[id].getData(index) - lr * self.Tensors[id].getGradient(index))
+                    self.Tensors[id].setData(index, (1 - lr * weight_decay) * self.Tensors[id].getData(index) - lr * min(threshold,max(-threshold,self.Tensors[id].getGradient(index))))
         
         if(optType == "sgd_momentum"):
             for i in range(len(self.backwardTape)):
                 let id = self.Tensors[self.backwardTape[i]].id
                 for index in range(self.Tensors[id].getCap()):
-                    self.Tensors[id].setVelocity(index, momentum * self.Tensors[id].getVelocity(index) + lr * self.Tensors[id].getGradient(index))
+                    self.Tensors[id].setVelocity(index, momentum * self.Tensors[id].getVelocity(index) + lr * min(threshold,max(-threshold,self.Tensors[id].getGradient(index))))
                     self.Tensors[id].setData(index, (1 - lr * weight_decay) * self.Tensors[id].getData(index) - self.Tensors[id].getVelocity(index))
 
 

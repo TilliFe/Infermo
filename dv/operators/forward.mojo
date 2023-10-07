@@ -77,7 +77,6 @@ fn add(inout C: Tensor, A: Tensor, B: Tensor):
                 )
             vectorize[nelts, v_add_3](A.getCap())
 
-
 @always_inline
 fn ReLU(inout B: Tensor, A: Tensor): 
     @parameter
@@ -99,21 +98,22 @@ fn sum(inout B: Tensor, A: Tensor):
 fn softmax(inout B: Tensor, A: Tensor):
     # #by default take the softmax along the last dimension of the tensor
     let num_dims = A.getNum_dims()
-    let M = A.getShape(num_dims-2)
+    # let M = A.getShape(num_dims-2)
     let N = A.getShape(num_dims-1)
-    let num_rows = A.getCap() // N
+    # let num_rows = A.getCap() // N
 
-    for i in range(B.getCap()):
-        B.data.store(i,exp(A.data.load(i)))
-
-    for s in range(B.getCap() // (M*N)):
-        let offset = s * M * N
-        for m in range(M):
-            var sum : Float32 = 0
-            for n in range(N):
-                sum += B.data.load(offset + m*N + n)
-            for n in range(N):
-                B.data.store(offset + m*N + n, B.data.load(offset + m*N + n) / sum)
+    for s in range(B.cap//N):
+        var max_el:Float32 = 0.0
+        for i in range(N):
+            if(B.data.load(s*N+i) > max_el):
+                max_el = B.data.load(s*N+i)
+        for i in range(N):
+            B.data.store(s*N+i,exp(A.data.load(s*N+i) - max_el))
+        var sum: Float32 = 0.0
+        for i in range(N):
+            sum += B.data.load(s*N+i)
+        for i in range(N):
+            B.data.store(s*N+i, B.data.load(s*N+i) / sum)
 
     # this does not work yet
     # for s in range(B.cap // N):
@@ -146,9 +146,8 @@ fn CE(inout C: Tensor, A: Tensor, B: Tensor):
     let N = A.shape[num_dims-1]
     let epsilon = Float32(1e-8)
     for index in range(A.getCap()):
-        if(B.getData(index) > Float32(0.0001)):
-            let error = -A.getData(index) * log(B.getData(index) + epsilon)
-            C.setData(0, C.getData(0) + error)
+        let error = -A.getData(index) * log(B.getData(index) + epsilon)
+        C.setData(0, C.getData(0) + error)
     C.setData(0, C.getData(0) / (Float32(A.getCap()) / Float32(N)))
 
 

@@ -122,28 +122,28 @@ fn mask(inout nn: Module, inout A: Tensor, l_value: Float32 = 0.0, u_value: Floa
 
 
 @always_inline
-fn Embed(inout nn: Module, d_vocab: Int, d_model: Int, batch_size: Int, inout x: Tensor) -> Tensor:
+fn Embed(inout nn: Module, d_vocab: Int, d_model: Int, batch_size: Int, init_std: Float32, inout x: Tensor) -> Tensor:
     var W_E = Tensor(shape(d_vocab,d_model))
-    W_E.initRandn(Float32(1.0)/sqrt(Float32(d_model)))
+    W_E.initRandn(init_std)
     return nn.mul(x,W_E)
 
 
 @always_inline
-fn Unembed(inout nn: Module, d_vocab: Int, d_model: Int, batch_size: Int, inout x: Tensor) -> Tensor:
+fn Unembed(inout nn: Module, d_vocab: Int, d_model: Int, batch_size: Int, init_std: Float32, inout x: Tensor) -> Tensor:
     var W_U = Tensor(shape(d_model,d_vocab))
-    W_U.initRandn(Float32(1.0)/sqrt(Float32(d_model)))
+    W_U.initRandn(init_std)
     return nn.mul(x, W_U)
 
 
 @always_inline
-fn PosEmbed(inout nn: Module, max_ctx: Int, d_model: Int, batch_size: Int, inout x: Tensor) -> Tensor:
+fn PosEmbed(inout nn: Module, max_ctx: Int, d_model: Int, batch_size: Int, init_std: Float32, inout x: Tensor) -> Tensor:
     var W_pos = Tensor(shape(max_ctx,d_model))
-    W_pos.initRandn(Float32(1.0)/sqrt(Float32(d_model)))
+    W_pos.initRandn(init_std)
     return nn.mul(W_pos, x)
 
 
 @always_inline
-fn Attention(inout nn: Module, d_model: Int, num_heads: Int, d_head: Int, n_ctx: Int, batch_size: Int, seq_len: Int, inout x: Tensor) -> Tensor:
+fn Attention(inout nn: Module, d_model: Int, num_heads: Int, d_head: Int, n_ctx: Int, batch_size: Int, seq_len: Int, init_std: Float32, inout x: Tensor) -> Tensor:
     
     # init    
     var x_t_unreshaped = nn.transpose(x)
@@ -153,10 +153,10 @@ fn Attention(inout nn: Module, d_model: Int, num_heads: Int, d_head: Int, n_ctx:
     var W_Q = Tensor(shape(num_heads, d_head, d_model))
     var W_V = Tensor(shape(num_heads, d_head, d_model))
     var W_O = Tensor(shape(num_heads*d_head, d_model))
-    W_K.initRandn(Float32(1.0)/sqrt(Float32(d_model)))
-    W_Q.initRandn(Float32(1.0)/sqrt(Float32(d_model))) 
-    W_V.initRandn(Float32(1.0)/sqrt(Float32(d_model)))
-    W_O.initRandn(Float32(1.0)/sqrt(Float32(d_model)))  
+    W_K.initRandn(init_std)
+    W_Q.initRandn(init_std) 
+    W_V.initRandn(init_std)
+    W_O.initRandn(init_std)  
 
     # attention heads
     var k = nn.mul(W_K,x_t)     # batch_size,num_heads,d_head,seq_len
@@ -176,13 +176,13 @@ fn Attention(inout nn: Module, d_model: Int, num_heads: Int, d_head: Int, n_ctx:
     return nn.mul(x,W_O)        # batch_size, seq_len, d_model
 
 
-fn MLP(inout nn: Module, d_model: Int, d_mlp: Int, batch_size: Int, seq_len: Int, inout x: Tensor) -> Tensor:
+fn MLP(inout nn: Module, d_model: Int, d_mlp: Int, batch_size: Int, seq_len: Int, init_std: Float32, inout x: Tensor) -> Tensor:
 
     # init
     var x_t = nn.transpose(x) # shape: batch_size,d_model,seq_len
 
     var W_in = Tensor(shape(d_mlp,d_model))
-    W_in.initRandn(Float32(1.0)/sqrt(Float32(d_model)))
+    W_in.initRandn(init_std)
 
     var b_in_flat = Tensor(shape(d_mlp,1))
     var ones_in = Tensor(shape(1,seq_len))
@@ -191,7 +191,7 @@ fn MLP(inout nn: Module, d_model: Int, d_mlp: Int, batch_size: Int, seq_len: Int
     var b_in = nn.mul(b_in_flat,ones_in)
 
     var W_out = Tensor(shape(d_model,d_mlp))
-    W_out.initRandn(Float32(1.0)/sqrt(Float32(d_model)))
+    W_out.initRandn(init_std)
 
     var b_out_flat = Tensor(shape(d_model,1))
     var ones_out = Tensor(shape(1,seq_len))
@@ -208,7 +208,7 @@ fn MLP(inout nn: Module, d_model: Int, d_mlp: Int, batch_size: Int, seq_len: Int
     return nn.transpose(x)    # batch_size,seq_len,d_model = shape(input)
 
 
-fn TransformerBlock(inout nn: Module, d_model: Int, num_heads: Int, d_head: Int, n_ctx: Int, d_mlp: Int, batch_size: Int, seq_len: Int, use_attn: Bool, use_mlp: Bool, inout x: Tensor) -> Tensor:
+fn TransformerBlock(inout nn: Module, d_model: Int, num_heads: Int, d_head: Int, n_ctx: Int, d_mlp: Int, batch_size: Int, seq_len: Int, use_attn: Bool, use_mlp: Bool, init_std: Float32, inout x: Tensor) -> Tensor:
     var res_stream = x
     if(use_attn):
         x = Attention(
@@ -219,6 +219,7 @@ fn TransformerBlock(inout nn: Module, d_model: Int, num_heads: Int, d_head: Int,
             n_ctx=seq_len,
             batch_size=batch_size,
             seq_len=seq_len,
+            init_std=init_std,
             x=x
         )
     if(use_mlp):
@@ -228,6 +229,7 @@ fn TransformerBlock(inout nn: Module, d_model: Int, num_heads: Int, d_head: Int,
             d_mlp=d_mlp,
             batch_size=batch_size,
             seq_len=seq_len,
+            init_std=init_std,
             x=x
         )
     return nn.add(res_stream,x)
