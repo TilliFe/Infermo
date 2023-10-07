@@ -47,17 +47,17 @@ struct model:
 
     @always_inline
     fn step(inout self):
-        self.nn.optimize('sgd_momentum', lr = 0.0001, momentum = 0.9)
+        self.nn.optimize('sgd_momentum', lr = 0.01, momentum = 0.9, weight_decay=0.01)
 
 
 # train the model
 fn main()raises:
 
     # init
-    var dl = DataLoader('./infermo/datasets/mnist.txt')
+    var dl = DataLoader('./dv/datasets/mnist.txt')
     var model = model()
 
-    let num_epochs = 1000
+    let num_epochs = 10000
     var lossSum: Float32 = 0
     var avgAcc: Float32 = 0
     let every = 100

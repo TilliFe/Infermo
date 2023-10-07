@@ -285,7 +285,7 @@ struct Module:
 
         C.setName('CE')
         if(A.name == "softmax"):
-            A.otherParams.store(0,3001) # 3001 means that the child is CE node -> simplify gradient computation
+            A.otherParams.store(0,3001) # 3001 means that the child is CE node -> simplifies gradient computation
         if(B.name == "softmax"):
             B.otherParams.store(0,3001)
 
@@ -463,6 +463,7 @@ struct Module:
             if(curr.getName() == 'transpose'):
                 var par1 = self.Tensors[curr.getParent(0)]
                 transpose_grad(curr,par1)
+
 
     fn optimize(inout self, optType: String, lr: Float32 = 0.001, momentum: Float32 = 0.9, weight_decay: Float32 = 0.001):
         

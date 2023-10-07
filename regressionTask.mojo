@@ -18,7 +18,7 @@ struct model:
         self.nn = Module()
 
         # define model architecture
-        var x = Linear(self.nn,self.input, num_neurons=8, addBias=True, activation='ReLU')
+        var x = Linear(self.nn,self.input, num_neurons=16, addBias=True, activation='ReLU')
         for i in range(2):
             x = Linear(self.nn,x, num_neurons=32, addBias=True, activation='ReLU')
         self.logits = Linear(self.nn,x,1,True,'none')
@@ -37,7 +37,7 @@ struct model:
 
     @always_inline
     fn step(inout self):
-        self.nn.optimize('sgd_momentum', lr = 0.1, momentum = 0.9)
+        self.nn.optimize('sgd_momentum', lr = 0.1, momentum = 0.9, weight_decay=0.0001)
 
 
 # Data Generator for a simple regression problem
@@ -72,7 +72,7 @@ fn main()raises:
     let num_epochs = 1000
 
     var lossSum: Float32 = 0
-    let every = 100
+    let every = 50
 
     for epoch in range(0,num_epochs):
         dataset.random(epoch)

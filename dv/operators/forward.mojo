@@ -138,7 +138,7 @@ fn MSE(inout C: Tensor, A: Tensor, B: Tensor):
     for index in range(A.getCap()):
         let error = (A.getData(index) - B.getData(index)) * (A.getData(index) - B.getData(index))
         C.setData(0, C.getData(0) + error)
-    C.setData(0, C.getData(0) / A.getCap())
+    C.setData(0, C.getData(0) / Float32(A.getCap()))
 
 @always_inline
 fn CE(inout C: Tensor, A: Tensor, B: Tensor):
@@ -149,7 +149,7 @@ fn CE(inout C: Tensor, A: Tensor, B: Tensor):
         if(B.getData(index) > Float32(0.0001)):
             let error = -A.getData(index) * log(B.getData(index) + epsilon)
             C.setData(0, C.getData(0) + error)
-    C.setData(0, C.getData(0) / (Float32(A.getCap()) / N))
+    C.setData(0, C.getData(0) / (Float32(A.getCap()) / Float32(N)))
 
 
 @always_inline

@@ -37,24 +37,24 @@ fn dataGenerator(inout inputs: Tensor, inout trueVals: Tensor, batch_size: Int, 
 fn main():
 
     # transformer config
-    let d_model=64
-    let d_vocab=8
+    let d_model=32
+    let d_vocab=16
     let num_heads=4
     let d_head=d_model//num_heads
     let n_ctx=4
-    let d_mlp=128
-    let batch_size=16
+    let d_mlp=64
+    let batch_size=64
     let seq_len=n_ctx
-    let num_layers=1
+    let num_layers=2
     let use_attn=True
     let use_mlp=True
 
     # training config
     let num_epochs = 1000
-    let every = 100
-    let lr = 0.001
-    let momentum = 0.9
-    let wd = 0.1
+    let every = 25
+    let lr = 0.01
+    let momentum = 0.8
+    let wd = 0.01
 
     # init
     var nn = Module()
@@ -62,6 +62,8 @@ fn main():
     inputs.requiresGradient = False
     var trueVals = Tensor(shape(batch_size,seq_len,d_vocab))
     trueVals.requiresGradient = False
+
+    dataGenerator(inputs,trueVals,batch_size,seq_len,d_vocab)
     
     # architecture of a n layer Transformer
     var x = Embed(nn,d_vocab,d_model,batch_size,inputs)
@@ -90,7 +92,7 @@ fn main():
     for epoch in range(1,num_epochs+1):
 
         # fill inputs and trueVals with a batch of data
-        dataGenerator(inputs,trueVals,batch_size,seq_len,d_vocab)
+        # dataGenerator(inputs,trueVals,batch_size,seq_len,d_vocab)
 
         # forward pass through the network
         nn.forward(loss)
@@ -112,3 +114,7 @@ fn main():
         # take a optimization step
         nn.optimize('sgd_momentum', lr = lr, momentum = momentum, weight_decay=wd)
     
+    # nn.forward(loss)
+    # nn.backward(loss)
+    # nn.printTensors()
+

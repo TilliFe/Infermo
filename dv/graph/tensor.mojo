@@ -218,6 +218,16 @@ struct Tensor:
             let sigma = sqrt( Float32(2.0) / self.shape[self.num_dims-1]) 
             self.setData(i, z * sigma)
 
+    fn initRandn(self, std: Float32 = Float32(1.0), mu: Float32 = Float32(0.0)):
+        seed()
+        let pi = 3.14159265358979
+        let u1 = DTypePointer[DType.float32].alloc(self.cap) 
+        let u2 = DTypePointer[DType.float32].alloc(self.cap) 
+        rand(u1, self.cap)
+        rand(u2, self.cap)
+        for i in range(self.cap):
+            let z = sqrt(-Float32(2.0) * log(u1.load(i))) * cos(Float32(2.0) * pi * u2.load(i))
+            self.setData(i, z * std + mu)
 
     @always_inline
     fn getData(self, index: Int) -> Float32:
