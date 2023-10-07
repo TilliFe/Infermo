@@ -2,13 +2,15 @@
 
 ### AutoDiff with Tensors in pure Mojo!
 
-#### *New*: Implemention of a GPT-Style **Transformer**: Functional, Yet Under Optimization 🔧⚙️🚀
+* Training of **Transformers** and various Neural Network architectures.
+* Independence from external libraries.
+* Dynamic, object-oriented model definition
+* Automatic gradient computation.
+* Only a **1000 lines of code**: See how things work under the hood!
 
-## Features
+Infermo is currently a Proof-of-Concept. While it’s mainly functional, it’s still under optimization and currently operates on CPU only.
 
-- **No External Libraries**: Infermo is built entirely in Mojo, without the use of any external libraries written in other languages like C++ or Python.
-- **Easy Model Definition**: Define your models dynamically in an object-oriented way just like in Pytorch. Train Neural Networks on classification and regression tasks.
-- **Automatic Differentiation**: Compute gradients automatically.
+I am looking forward to your contributions. :)
 
 ###
 ![Alt text](image.png)
