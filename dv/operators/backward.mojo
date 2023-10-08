@@ -125,6 +125,101 @@ fn add_grad(C: Tensor, inout A: Tensor, inout B: Tensor):
                     )
                 vectorize[nelts, v_add_B](H) 
 
+    # # Loop over each image in the batch
+    # for i in range(A.shape[0]):
+    #     # Loop over each filter
+    #     for j in range(C.shape[0]):
+    #         # Loop over each channel
+    #         for x in range(B.shape[2]):
+    #             for y in range(B.shape[3]):
+    #                 var patch_sum: Float32 = 0.0
+
+    #                 # Apply the convolution operation - vectorize?
+    #                 for k in range(A.shape[1]):
+    #                 # Convolve the k-th channel of the i-th image with the k-th channel of the j-th filter
+    #                     for dx in range(C.shape[2]):
+    #                         for dy in range(C.shape[3]):                        
+    #                             # Calculate input indices with consideration for padding and stride
+    #                             let ix = x * stride - padding + dx
+    #                             let iy = y * stride - padding + dy
+    #                             # Skip if index is out of bounds (this is 'zero' padding)
+    #                             if ix < 0 or iy < 0 or ix >= A.shape[2] or iy >= A.shape[3]:
+    #                                 continue
+    #                             let A_index = index(j, k, ix, iy, A.shape[1], A.shape[2], A.shape[3])
+    #                             let C_gradient_index = index(i, k, dx, dy, A.shape[1], C.shape[2], C.shape[3])
+    #                             # Add to patch sum
+    #                             patch_sum += A.data.load(A_index) * C.gradient.load(C_gradient_index)
+
+    #                 # Store patch sum into C after innermost loops
+    #                 let B_gradient_index = index(i, j, x, y, C.shape[0], B.shape[2], B.shape[3])
+    #                 B.gradient.store(B_gradient_index, B.gradient.load(B_gradient_index) + patch_sum)
+
+
+@always_inline
+fn conv2d_grad(C: Tensor, inout A: Tensor, inout B: Tensor):
+
+    # let batch_size = A.shape[0]
+    # let in_channels = A.shape[1]
+    # let width = A.shape[2]
+    # let height = A.shape[3]
+
+    # let out_channels = B.shape[0]
+    # let kernel_width = B.shape[2]
+    # let kernel_height = B.shape[3]
+
+    # # Initialize output tensor with zeros
+    # let output_width = C.shape[2]
+    # let output_height = C.shape[3]    
+    let padding = C.otherParams.load(0)
+    let stride = C.otherParams.load(1)
+
+    # Function to calculate the index in the 1D buffer
+    fn index(n: Int, c: Int, h: Int, w: Int, num_channels: Int, width: Int, height: Int) -> Int:
+        return n*(num_channels*height*width) + c*(height*width) + h*width + w
+
+    # ##### compute the gradietn of the Kernel (right tensor) ########################################
+    for i in range(A.shape[1]): # in_channels
+        for j in range(B.shape[0]): # out_channels
+            for x in range(B.shape[2]): # kernel_width
+                for y in range(B.shape[3]): # kernel_height
+                    var patch_sum: Float32 = 0.0
+                    for b in range(A.shape[0]):
+                        for dx in range(C.shape[2]):
+                            for dy in range(C.shape[3]):                        
+                                # Calculate input indices with consideration for padding and stride
+                                let ix = x * stride - padding + dx
+                                let iy = y * stride - padding + dy
+                                # Skip if index is out of bounds (this is 'zero' padding)
+                                if ix < 0 or iy < 0 or ix >= A.shape[2] or iy >= A.shape[3]:
+                                    continue
+                                let A_index = index(b, i, ix, iy, A.shape[1], A.shape[2], A.shape[3])
+                                let C_gradient_index = index(b, j, dx, dy, C.shape[1], C.shape[2], C.shape[3])
+                                # Add to patch sum
+                                patch_sum += A.data.load(A_index) * C.gradient.load(C_gradient_index)
+                    let B_gradient_index = index(i, j, x, y, B.shape[0], B.shape[2], B.shape[3])
+                    B.gradient.store(B_gradient_index, patch_sum)
+
+    # ##### compute the gradietn of the Input (left tensor) ############################################
+    for b in range(A.shape[0]): # batch_size
+        for j in range(A.shape[1]): # in_channels
+            for i in range(B.shape[0]): # out_channels
+                for x in range(A.shape[2]):
+                    for y in range(A.shape[3]):
+                        var patch_sum : Float32 = 0.0
+                        for dx in range(B.shape[2]):
+                            for dy in range(B.shape[3]):
+                                let ix = x * stride - dx + padding
+                                let iy = y * stride - dy + padding
+                                # Skip if index is out of bounds (this is 'zero' padding)
+                                if ix < 0 or iy < 0 or ix >= C.shape[2] or iy >= C.shape[3]:
+                                    continue
+                                let C_gradient_index = index(b,i,ix,iy,C.shape[1],C.shape[2],C.shape[3])
+                                let B_index = index(i,j,B.shape[2]-dx-1,B.shape[3]-dy-1,B.shape[1],B.shape[2],B.shape[3])
+                                patch_sum += C.gradient.load(C_gradient_index) * B.data.load(B_index)
+                        let A_gradient_index = index(b,j,x,y,A.shape[1],A.shape[2],A.shape[3])
+                        A.gradient.store( A_gradient_index, A.gradient.load(A_gradient_index) + patch_sum)
+
+
 @always_inline
 fn ReLU_grad(B: Tensor, inout A: Tensor):
     @parameter

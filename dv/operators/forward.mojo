@@ -78,6 +78,48 @@ fn add(inout C: Tensor, A: Tensor, B: Tensor):
             vectorize[nelts, v_add_3](A.getCap())
 
 @always_inline
+fn conv2d(inout C: Tensor, A: Tensor, B: Tensor):
+    
+    # let batch_size = A.shape[0]
+    # let in_channels = A.shape[1]
+    # let width = A.shape[2]
+    # let height = A.shape[3]
+
+    # let out_channels = B.shape[0]
+    # let kernel_width = B.shape[2]
+    # let kernel_height = B.shape[3]
+
+    # # Initialize output tensor with zeros
+    # let output_width = C.shape[2]
+    # let output_height = C.shape[3]
+    let padding = C.otherParams.load(0)
+    let stride = C.otherParams.load(1)
+
+    # Function to calculate the index in the 1D buffer
+    fn index(n: Int, c: Int, h: Int, w: Int, num_channels: Int, width: Int, height: Int) -> Int:
+        return n*(num_channels*height*width) + c*(height*width) + h*width + w
+
+    # Loop over each image in the batch
+    for i in range(A.shape[0]):
+        for j in range(B.shape[0]):
+            for x in range(C.shape[2]):
+                for y in range(C.shape[3]):
+                    var patch_sum: Float32 = 0.0
+                    # Apply the convolution operation - vectorize?
+                    for k in range(A.shape[1]):
+                        for dx in range(B.shape[2]):
+                            for dy in range(B.shape[3]):                        
+                                let ix = x * stride - padding + dx
+                                let iy = y * stride - padding + dy
+                                if ix < 0 or iy < 0 or ix >= A.shape[2] or iy >= A.shape[3]:
+                                    continue
+                                let A_index = index(i, k, ix, iy, A.shape[1], A.shape[2], A.shape[3])
+                                let B_index = index(j, k, dx, dy, A.shape[1], B.shape[2], B.shape[3])
+                                patch_sum += A.data.load(A_index) * B.data.load(B_index)
+                    let C_index = index(i, j, x, y, B.shape[0], C.shape[2], C.shape[3])
+                    C.data.store(C_index, patch_sum)
+
+@always_inline
 fn ReLU(inout B: Tensor, A: Tensor): 
     @parameter
     fn v_relu[nelts: Int](i: Int):

@@ -8,8 +8,8 @@ from random import rand, random_si64, seed, randint
 from math import sin, cos, log, sqrt, exp, min, max
 
 from ..graph.tensor import Tensor
-from ..operators.forward import mul, add, sum, ReLU, softmax, MSE, CE, reshape, transpose
-from ..operators.backward import mul_grad, add_grad, sum_grad, ReLU_grad, softmax_grad, MSE_grad, CE_grad, reshape_grad, transpose_grad
+from ..operators.forward import mul, add, sum, conv2d, ReLU, softmax, MSE, CE, reshape, transpose
+from ..operators.backward import mul_grad, add_grad, conv2d_grad, sum_grad, ReLU_grad, softmax_grad, MSE_grad, CE_grad, reshape_grad, transpose_grad
 from ..helpers.shape import shape, Vec
 
 struct Module:
@@ -162,6 +162,50 @@ struct Module:
         var C = Tensor(new_shape)
 
         C.setName('add')
+
+        if(not A.getInTensors()):
+            C.addParent(self.counter)
+            self.addTensor(A)
+        else:
+            C.addParent(A.getId())
+
+        if(not B.getInTensors()):
+            C.addParent(self.counter)
+            self.addTensor(B)
+        else:
+            C.addParent(B.getId())
+        self.addTensor(C)
+
+        return C 
+
+    @always_inline
+    fn conv2d(inout self, inout A: Tensor, inout B: Tensor, padding: Int, stride: Int) -> Tensor: # A: input, B: kernels
+
+        # assumption: A (batch of input images) is of shape (batch_size, channels, width, height)
+        #             B (set of kernels) is of shape (num_filters, channels, a, b)
+
+        let A_num_dims = A.getNum_dims()
+        let B_num_dims = B.getNum_dims()
+
+        let batch_size = A.shape[0]
+        let in_channels = A.shape[1]
+        let width = A.shape[2]
+        let height = A.shape[3]
+
+        let out_channels = B.shape[0]
+        if(in_channels != B.shape[1]):
+            print("Error (at conv2d): number of channels must be equal in the input and the kernels")
+        let kernel_width = B.shape[2]
+        let kernel_height = B.shape[3]
+
+        # init result Tensor 
+        let new_shape = shape(batch_size,out_channels, (width - kernel_width + 2*padding) // stride + 1, (height - kernel_height + 2*padding) // stride + 1) 
+        var C = Tensor(new_shape)
+
+        C.otherParams.store(0, padding)
+        C.otherParams.store(1, stride)
+
+        C.setName('conv2d')
 
         if(not A.getInTensors()):
             C.addParent(self.counter)
@@ -381,6 +425,10 @@ struct Module:
                 let par1 = self.Tensors[curr.getParent(0)]
                 let par2 = self.Tensors[curr.getParent(1)]
                 add(curr,par1,par2)
+            if(curr.getName() == 'conv2d'):
+                let par1 = self.Tensors[curr.getParent(0)]
+                let par2 = self.Tensors[curr.getParent(1)]
+                conv2d(curr,par1,par2)
             if(curr.getName() == 'ReLU'):
                 let par1 = self.Tensors[curr.getParent(0)]
                 ReLU(curr,par1) 
@@ -440,6 +488,10 @@ struct Module:
                 var par1 = self.Tensors[curr.getParent(0)]
                 var par2 = self.Tensors[curr.getParent(1)]
                 add_grad(curr,par1,par2)
+            if(curr.getName() == 'conv2d'):
+                var par1 = self.Tensors[curr.getParent(0)]
+                var par2 = self.Tensors[curr.getParent(1)]
+                conv2d_grad(curr,par1,par2)
             if(curr.getName() == 'ReLU'):
                 var par1 = self.Tensors[curr.getParent(0)]
                 ReLU_grad(curr,par1)

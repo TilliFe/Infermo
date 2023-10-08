@@ -11,6 +11,33 @@ from ..graph.tensor import Tensor
 from ..graph. module import Module
 from ..helpers.shape import Vec, shape
 
+# ###### This convNet implementation has just started, nothing to see here so far! #########################################################################
+
+@always_inline
+fn Conv2d(inout nn: Module, inout x: Tensor, out_channels: Int, kernel_width: Int, kernel_height: Int, stride: Int, padding: Int, use_bias: Bool = True) -> Tensor:
+    
+    # init
+    let batch_size = x.shape[0]
+    let in_channels = x.shape[1]
+    var kernels = Tensor(shape(out_channels,in_channels,kernel_width,kernel_height))
+    kernels.initRandn(0.01)
+    var conv = nn.conv2d(x,kernels,padding,stride)
+
+    if(use_bias):
+        var bias_raw = Tensor(shape(out_channels,1))
+        bias_raw.initRandn(0.01)
+        var ones = Tensor(shape(1,conv.shape[2]*conv.shape[3]))
+        ones.setDataAll(1.0)
+        ones.requiresGradient = False
+        var bias_ones = nn.mul(bias_raw,ones)
+        var bias = nn.reshape(bias_ones,shape(out_channels,conv.shape[2],conv.shape[3]))
+        return nn.add(conv,bias)
+    else:
+        return conv
+
+
+
+
 @always_inline
 fn Linear(inout nn: Module, inout x: Tensor, num_neurons: Int, addBias : Bool = True, activation: String = 'ReLU') -> Tensor:
     let x_rows = x.getShape(x.num_dims - 2)

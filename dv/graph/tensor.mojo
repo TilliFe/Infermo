@@ -285,8 +285,8 @@ struct Tensor:
         let col_skips: Int = (self.getSkips(0) * self.getShape(0)) // cols
         print_no_newline("<Tensor: ")
         for i in range(col_skips):
-            if(col_skips > 6 and i > 2 and i < col_skips - 3):
-                if(i == 3):
+            if(col_skips > 10 and i > 4 and i < col_skips - 5):
+                if(i == 5):
                     print("                 ... ")
                 continue
             else:
@@ -360,8 +360,8 @@ struct Tensor:
         let col_skips: Int = (self.getSkips(0) * self.getShape(0)) // cols
         print_no_newline("<Tensor: ")
         for i in range(col_skips):
-            if(col_skips > 6 and i > 2 and i < col_skips - 3):
-                if(i == 3):
+            if(col_skips > 10 and i > 4 and i < col_skips - 5):
+                if(i == 5):
                     print("                 ... ")
                 continue
             else:
@@ -476,8 +476,8 @@ struct Tensor:
         let col_skips: Int = (self.getSkips(0) * self.getShape(0)) // cols
         print_no_newline("<Tensor: ")
         for i in range(col_skips):
-            if(col_skips > 6 and i > 2 and i < col_skips - 3):
-                if(i == 3):
+            if(col_skips > 10 and i > 4 and i < col_skips - 5):
+                if(i == 5):
                     print("                 ... ")
                 continue
             else:
@@ -566,8 +566,8 @@ struct Tensor:
         let col_skips: Int = (self.getSkips(0) * self.getShape(0)) // cols
         print_no_newline("<Tensor: ")
         for i in range(col_skips):
-            if(col_skips > 6 and i > 2 and i < col_skips - 3):
-                if(i == 3):
+            if(col_skips > 10 and i > 4 and i < col_skips - 5):
+                if(i == 5):
                     print("                 ... ")
                 continue
             else:
