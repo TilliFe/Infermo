@@ -8,8 +8,8 @@ from random import rand, random_si64, seed, randint
 from math import sin, cos, log, sqrt, exp, min, max
 
 from ..graph.tensor import Tensor
-from ..operators.forward import mul, add, sum, conv2d, ReLU, softmax, MSE, CE, reshape, transpose
-from ..operators.backward import mul_grad, add_grad, conv2d_grad, sum_grad, ReLU_grad, softmax_grad, MSE_grad, CE_grad, reshape_grad, transpose_grad
+from ..operators.forward import mul, add, sum, conv2d, ReLU, maxPool2d, softmax, MSE, CE, reshape, transpose
+from ..operators.backward import mul_grad, add_grad, conv2d_grad, sum_grad, ReLU_grad, maxPool2d_grad, softmax_grad, MSE_grad, CE_grad, reshape_grad, transpose_grad
 from ..helpers.shape import shape, Vec
 
 struct Module:
@@ -241,6 +241,28 @@ struct Module:
 
         return B
 
+    @always_inline
+    fn maxPool2d(inout self, inout A: Tensor, kernel_width: Int, kernel_height: Int, stride: Int, padding: Int) -> Tensor: 
+        let new_shape = shape(A.shape[0],A.shape[1],(2*padding + A.shape[2] - (kernel_width - 1) - 1)//stride + 1, (2*padding + A.shape[3] - (kernel_height - 1) - 1)//stride + 1)
+
+        var B = Tensor(new_shape)
+
+        B.otherParams.store(0,padding)
+        B.otherParams.store(1,stride)
+        B.otherParams.store(2,kernel_width)
+        B.otherParams.store(3,kernel_height)
+
+        B.setName('maxPool2d')
+
+        if(not A.getInTensors()):
+            B.addParent(self.counter)
+            self.addTensor(A)
+        else:
+            B.addParent(A.getId())
+        self.addTensor(B)
+
+        return B
+
 
     @always_inline
     fn sum(inout self, inout A: Tensor) -> Tensor: 
@@ -432,6 +454,9 @@ struct Module:
             if(curr.getName() == 'ReLU'):
                 let par1 = self.Tensors[curr.getParent(0)]
                 ReLU(curr,par1) 
+            if(curr.getName() == 'maxPool2d'):
+                let par1 = self.Tensors[curr.getParent(0)]
+                maxPool2d(curr,par1) 
             if(curr.getName() == 'sum'):
                 let par1 = self.Tensors[curr.getParent(0)]
                 sum(curr,par1)
@@ -495,6 +520,9 @@ struct Module:
             if(curr.getName() == 'ReLU'):
                 var par1 = self.Tensors[curr.getParent(0)]
                 ReLU_grad(curr,par1)
+            if(curr.getName() == 'maxPool2d'):
+                var par1 = self.Tensors[curr.getParent(0)]
+                maxPool2d_grad(curr,par1)
             if(curr.getName() == 'sum'):
                 var par1 = self.Tensors[curr.getParent(0)]
                 sum_grad(curr,par1)

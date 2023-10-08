@@ -11,7 +11,6 @@ from ..graph.tensor import Tensor
 from ..graph. module import Module
 from ..helpers.shape import Vec, shape
 
-# ###### This convNet implementation has just started, nothing to see here so far! #########################################################################
 
 @always_inline
 fn Conv2d(inout nn: Module, inout x: Tensor, out_channels: Int, kernel_width: Int, kernel_height: Int, stride: Int, padding: Int, use_bias: Bool = True) -> Tensor:
@@ -34,8 +33,6 @@ fn Conv2d(inout nn: Module, inout x: Tensor, out_channels: Int, kernel_width: In
         return nn.add(conv,bias)
     else:
         return conv
-
-
 
 
 @always_inline

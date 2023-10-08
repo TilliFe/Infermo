@@ -5,7 +5,7 @@ from random import rand
 from runtime.llcl import Runtime
 from algorithm import vectorize, parallelize
 from random import rand, random_si64, seed, randint
-from math import sin, cos, log, sqrt, exp, abs
+from math import sin, cos, log, sqrt, exp, abs, max, min
 
 from ..graph.tensor import Tensor
 
@@ -80,18 +80,6 @@ fn add(inout C: Tensor, A: Tensor, B: Tensor):
 @always_inline
 fn conv2d(inout C: Tensor, A: Tensor, B: Tensor):
     
-    # let batch_size = A.shape[0]
-    # let in_channels = A.shape[1]
-    # let width = A.shape[2]
-    # let height = A.shape[3]
-
-    # let out_channels = B.shape[0]
-    # let kernel_width = B.shape[2]
-    # let kernel_height = B.shape[3]
-
-    # # Initialize output tensor with zeros
-    # let output_width = C.shape[2]
-    # let output_height = C.shape[3]
     let padding = C.otherParams.load(0)
     let stride = C.otherParams.load(1)
 
@@ -118,6 +106,39 @@ fn conv2d(inout C: Tensor, A: Tensor, B: Tensor):
                                 patch_sum += A.data.load(A_index) * B.data.load(B_index)
                     let C_index = index(i, j, x, y, B.shape[0], C.shape[2], C.shape[3])
                     C.data.store(C_index, patch_sum)
+
+@always_inline
+fn maxPool2d(inout B: Tensor, A: Tensor):
+    
+    let padding = B.otherParams.load(0)
+    let stride = B.otherParams.load(1)
+    let kernel_width = B.otherParams.load(2)
+    let kernel_height = B.otherParams.load(3)
+
+    # Function to calculate the index in the 1D buffer
+    fn index(n: Int, c: Int, h: Int, w: Int, num_channels: Int, width: Int, height: Int) -> Int:
+        return n*(num_channels*height*width) + c*(height*width) + h*width + w
+
+    for b in range(A.shape[0]): # batch_size
+        for i in range(A.shape[1]): # in_channels
+            for x in range(0,A.shape[2]-kernel_width+1 + 2*padding,stride): # width
+                for y in range(0,A.shape[3]-kernel_height+1 + 2*padding,stride): # height
+                    var arg_max: Int = 0
+                    var max_val: Float32 = -1000000.0
+                    for dx in range(kernel_width):
+                        for dy in range(kernel_height):
+                            let ix = x - padding + dx
+                            let iy = y - padding + dy
+                            if ix < 0 or iy < 0 or ix >= A.shape[2] or iy >= A.shape[3]:
+                                continue
+                            let idx = index(b,i,ix,iy,A.shape[1],A.shape[2],A.shape[3])
+                            let entry = A.data.load(idx)
+                            if(entry > max_val):
+                                max_val = entry
+                                arg_max = idx
+                    let idx = index(b,i,(x)//stride,(y)//stride,B.shape[1],B.shape[2],B.shape[3])
+                    B.data.store(idx,max_val)              
+
 
 @always_inline
 fn ReLU(inout B: Tensor, A: Tensor): 
