@@ -203,7 +203,7 @@ fn mse(inout c: Tensor, a: Tensor, b: Tensor):
     c.set_data(0, c.data.load(0) / Float32(a.cap))
 
 @always_inline
-fn cE(inout c: Tensor, a: Tensor, b: Tensor):
+fn ce(inout c: Tensor, a: Tensor, b: Tensor):
     let num_dims = a.num_dims
     let N = a.shape[num_dims-1]
     let epsilon = Float32(1e-8)

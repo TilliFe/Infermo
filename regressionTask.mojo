@@ -67,7 +67,7 @@ struct DataGenerator:
 
 
 # train the Model
-fn main()raises:
+fn main() raises:
 
     let dataset = DataGenerator(512)
     var model = Model()

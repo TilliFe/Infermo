@@ -1,2 +1,2 @@
-from .forward import mul, add, sum, relu, max_pool_2d, softmax, mse, cE, reshape, transpose
-from .backward import mul_grad, add_grad, sum_grad, max_pool_2d_grad, relu_grad, softmax_grad, mse_grad, cE_grad, reshape_grad, transpose_grad
+from .forward import mul, add, sum, relu, max_pool_2d, softmax, mse, ce, reshape, transpose
+from .backward import mul_grad, add_grad, sum_grad, max_pool_2d_grad, relu_grad, softmax_grad, mse_grad, ce_grad, reshape_grad, transpose_grad

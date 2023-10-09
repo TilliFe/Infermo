@@ -25,7 +25,7 @@ struct Model:
             x = linear(self.nn,x, num_neurons=64, addbias=True, activation='relu')
         x = linear(self.nn,x,10,True,'none')
         self.logits = self.nn.softmax(x)
-        self.loss = self.nn.cE(self.true_vals,self.logits)
+        self.loss = self.nn.ce(self.true_vals,self.logits)
 
     @always_inline     
     fn forward(inout self, _input: DTypePointer[DType.float32], _true_vals: DTypePointer[DType.float32]) -> Tensor:
@@ -53,7 +53,7 @@ struct Model:
 
 
 # train the Model
-fn main()raises:
+fn main() raises:
 
     # init
     var dl = DataLoader('./dv/datasets/mnist.txt')

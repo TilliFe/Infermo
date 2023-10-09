@@ -287,7 +287,7 @@ fn mse_grad(c: Tensor, inout a: Tensor, inout b: Tensor): # a: TrueVals, b: Logi
             b.grad.store(index, b.grad.load(index) + grad) 
 
 @always_inline
-fn cE_grad(c: Tensor, inout a: Tensor, inout b: Tensor): # a: TrueVals, b: Logits
+fn ce_grad(c: Tensor, inout a: Tensor, inout b: Tensor): # a: TrueVals, b: Logits
     let num_dims = a.num_dims
     let N = a.shape[num_dims-1]
 

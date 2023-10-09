@@ -87,7 +87,7 @@ fn main():
         )  
     x = unembed(nn,d_vocab,d_Model,batch_size,init_std,x)  
     var logits = nn.softmax(x)
-    var loss = nn.cE(true_vals,logits)
+    var loss = nn.ce(true_vals,logits)
 
     # training loop
     var avg_acc: Float32 = 0.0

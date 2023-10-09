@@ -21,13 +21,13 @@ struct Model:
 
         # define Model architecture
         var x = self.nn.reshape(self.input,shape(self.input.shape[0],1,28,28))                                  # 64,1,28,28
-        x = conv_2d(self.nn,x,out_channels=4,kernel_width=5,kernel_height=5,stride=1,padding=0,use_bias=False)   # 64,4,24,24
-        x = self.nn.max_pool_2d(x,kernel_width=4,kernel_height=4,stride=4,padding=0)                              # 64,4,6,6
+        x = conv_2d(self.nn,x,out_channels=4,kernel_width=5,kernel_height=5,stride=1,padding=0,use_bias=False)  # 64,4,24,24
+        x = self.nn.max_pool_2d(x,kernel_width=4,kernel_height=4,stride=4,padding=0)                            # 64,4,6,6
         x = self.nn.reshape(x,shape(64,144))                                                                    # 64,144
         x = linear(self.nn,x,64,True,'relu')                                                                    # 64,32
         x = linear(self.nn,x,10,True,'none')
         self.logits = self.nn.softmax(x)
-        self.loss = self.nn.cE(self.true_vals,self.logits)
+        self.loss = self.nn.ce(self.true_vals,self.logits)
 
     @always_inline     
     fn forward(inout self, _input: DTypePointer[DType.float32], _true_vals: DTypePointer[DType.float32]) -> Tensor:
@@ -55,7 +55,7 @@ struct Model:
 
 
 # train the Model
-fn main()raises:
+fn main() raises:
 
     # init
     var dl = DataLoader('./dv/datasets/mnist.txt')

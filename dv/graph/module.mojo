@@ -8,8 +8,8 @@ from random import rand, random_si64, seed, randint
 from math import sin, cos, log, sqrt, exp, min, max
 
 from ..graph.tensor import Tensor
-from ..operators.forward import mul, add, sum, conv_2d, relu, max_pool_2d, softmax, mse, cE, reshape, transpose
-from ..operators.backward import mul_grad, add_grad, conv_2d_grad, sum_grad, relu_grad, max_pool_2d_grad, softmax_grad, mse_grad, cE_grad, reshape_grad, transpose_grad
+from ..operators.forward import mul, add, sum, conv_2d, relu, max_pool_2d, softmax, mse, ce, reshape, transpose
+from ..operators.backward import mul_grad, add_grad, conv_2d_grad, sum_grad, relu_grad, max_pool_2d_grad, softmax_grad, mse_grad, ce_grad, reshape_grad, transpose_grad
 from ..helpers.shape import shape, Vec
 
 alias nelts = simdwidthof[DType.float32]()
@@ -304,14 +304,14 @@ struct Module:
         return c 
 
     @always_inline
-    fn cE(inout self, inout a: Tensor, inout b: Tensor) -> Tensor:
+    fn ce(inout self, inout a: Tensor, inout b: Tensor) -> Tensor:
 
         # check dimensions
         if(a.num_dims != b.num_dims):
-            print("Error (at cE): number of dimensions are not equal")
+            print("Error (at ce): number of dimensions are not equal")
         let num_dims = a.num_dims
         if(a.shape[num_dims-2] != b.shape[num_dims-2] or a.shape[num_dims-1] != b.shape[num_dims-1]):
-            print("Error (at cE): For cE computation, Matrices need to in the following shape: c[mxn] = op(a[mxn],b[mxn])")
+            print("Error (at ce): For ce computation, Matrices need to in the following shape: c[mxn] = op(a[mxn],b[mxn])")
 
         # init result Tensor 
         var new_shape = DynamicVector[Int]()
@@ -319,9 +319,9 @@ struct Module:
             new_shape.push_back(a.shape[i])
         var c = Tensor(shape(1))
 
-        c.set_name('cE')
+        c.set_name('ce')
         if(a.name == "softmax"):
-            a.other_params.store(0,3001) # 3001 means that the child is cE node -> simplifies grad computation
+            a.other_params.store(0,3001) # 3001 means that the child is ce node -> simplifies grad computation
         if(b.name == "softmax"):
             b.other_params.store(0,3001)
 
@@ -437,10 +437,10 @@ struct Module:
                 let par1 = self.tensors[curr.get_parent(0)]
                 let par2 = self.tensors[curr.get_parent(1)]
                 mse(curr,par1,par2) 
-            if(curr.name == 'cE'):
+            if(curr.name == 'ce'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 let par2 = self.tensors[curr.get_parent(1)]
-                cE(curr,par1,par2) 
+                ce(curr,par1,par2) 
             if(curr.name == 'reshape'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 reshape(curr,par1)
@@ -503,10 +503,10 @@ struct Module:
                 var par1 = self.tensors[curr.get_parent(0)]
                 var par2 = self.tensors[curr.get_parent(1)]
                 mse_grad(curr,par1,par2)
-            if(curr.name == 'cE'):
+            if(curr.name == 'ce'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 var par2 = self.tensors[curr.get_parent(1)]
-                cE_grad(curr,par1,par2)
+                ce_grad(curr,par1,par2)
             if(curr.name == 'reshape'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 reshape_grad(curr,par1)
