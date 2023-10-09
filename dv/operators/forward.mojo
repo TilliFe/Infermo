@@ -125,6 +125,7 @@ fn maxPool2d(inout B: Tensor, A: Tensor):
                 for y in range(0,A.shape[3]-kernel_height+1 + 2*padding,stride): # height
                     var arg_max: Int = 0
                     var max_val: Float32 = -1000000.0
+                    # vectorize ?
                     for dx in range(kernel_width):
                         for dy in range(kernel_height):
                             let ix = x - padding + dx
@@ -161,9 +162,7 @@ fn sum(inout B: Tensor, A: Tensor):
 fn softmax(inout B: Tensor, A: Tensor):
     # #by default take the softmax along the last dimension of the tensor
     let num_dims = A.getNum_dims()
-    # let M = A.getShape(num_dims-2)
     let N = A.getShape(num_dims-1)
-    # let num_rows = A.getCap() // N
 
     for s in range(B.cap//N):
         var max_el:Float32 = 0.0
@@ -218,15 +217,18 @@ fn CE(inout C: Tensor, A: Tensor, B: Tensor):
 fn reshape(inout B: Tensor, A: Tensor):
     for s in range(B.cap // A.cap):
         let offset = s * A.cap
-        for i in range(A.cap):
-            B.setData(offset + i, A.getData(i))
+        @parameter
+        fn v_reshape[nelts: Int](i: Int):
+            B.data.simd_store[nelts](
+                offset + i, A.data.simd_load[nelts](i)
+            )
+        vectorize[nelts, v_reshape](A.cap)
 
 
 @always_inline
 fn transpose(inout B: Tensor, A: Tensor):
     
-    # we always tranpose along the last two dimensions of the tensor
-
+    # we always tranpose along the last two dimensions of the tensor - vectorize? 
     let num_dims = A.getNum_dims()
     let M = A.getShape(num_dims-2)
     let N = A.getShape(num_dims-1)

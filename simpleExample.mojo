@@ -1,5 +1,6 @@
 from dv import Module, Tensor, shape, Linear, max, accuracy, DataLoader
 
+################### Random example: Compute Gradients automatically ##############################################
 fn main():
     # init
     var nn = Module()

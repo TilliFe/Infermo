@@ -13,7 +13,7 @@ Infermo is currently a Proof-of-Concept. While it’s mainly functional, it’s 
 I am looking forward to your contributions. :)
 
 ###
-![Alt text](image.png)
+![Alt text](./dv/datasets/image.png)
 
 ## Overview
 

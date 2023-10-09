@@ -19,12 +19,12 @@ fn Conv2d(inout nn: Module, inout x: Tensor, out_channels: Int, kernel_width: In
     let batch_size = x.shape[0]
     let in_channels = x.shape[1]
     var kernels = Tensor(shape(out_channels,in_channels,kernel_width,kernel_height))
-    kernels.initRandn(0.01)
+    kernels.initRandomHe()
     var conv = nn.conv2d(x,kernels,padding,stride)
 
     if(use_bias):
         var bias_raw = Tensor(shape(out_channels,1))
-        bias_raw.initRandn(0.01)
+        bias_raw.initRandn(0.001)
         var ones = Tensor(shape(1,conv.shape[2]*conv.shape[3]))
         ones.setDataAll(1.0)
         ones.requiresGradient = False

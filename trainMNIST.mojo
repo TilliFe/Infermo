@@ -1,5 +1,7 @@
 from dv import Module, Tensor, shape, Linear, max, accuracy, DataLoader
 
+######################## Basic MLP for handwritten digit recognition (MNIST) ################################################
+
 # define the model and its behaviour
 struct model:
     var nn: Module

@@ -12,6 +12,8 @@ from ..operators.forward import mul, add, sum, conv2d, ReLU, maxPool2d, softmax,
 from ..operators.backward import mul_grad, add_grad, conv2d_grad, sum_grad, ReLU_grad, maxPool2d_grad, softmax_grad, MSE_grad, CE_grad, reshape_grad, transpose_grad
 from ..helpers.shape import shape, Vec
 
+alias nelts = simdwidthof[DType.float32]()
+
 struct Module:
     var Tensors: DynamicVector[Tensor]
     var counter: Int
@@ -552,13 +554,30 @@ struct Module:
                 let id = self.Tensors[self.backwardTape[i]].id
                 for index in range(self.Tensors[id].getCap()):
                     self.Tensors[id].setData(index, (1 - lr * weight_decay) * self.Tensors[id].getData(index) - lr * min(threshold,max(-threshold,self.Tensors[id].getGradient(index))))
+                @parameter
+                fn v_update_data_sgd[nelts: Int](index: Int):
+                    self.Tensors[id].data.simd_store[nelts](
+                        index, (1 - lr * weight_decay) * self.Tensors[id].data.simd_load[nelts](index) - lr * self.Tensors[id].gradient.simd_load[nelts](index)
+                    )
+                vectorize[nelts, v_update_data_sgd](self.Tensors[id].cap)
         
         if(optType == "sgd_momentum"):
             for i in range(len(self.backwardTape)):
                 let id = self.Tensors[self.backwardTape[i]].id
-                for index in range(self.Tensors[id].getCap()):
-                    self.Tensors[id].setVelocity(index, momentum * self.Tensors[id].getVelocity(index) + lr * min(threshold,max(-threshold,self.Tensors[id].getGradient(index))))
-                    self.Tensors[id].setData(index, (1 - lr * weight_decay) * self.Tensors[id].getData(index) - self.Tensors[id].getVelocity(index))
+
+                @parameter
+                fn v_set_velocity[nelts: Int](index: Int):
+                    self.Tensors[id].velocity.simd_store[nelts](
+                        index, momentum * self.Tensors[id].velocity.simd_load[nelts](index) + lr * self.Tensors[id].gradient.simd_load[nelts](index)
+                    )
+                vectorize[nelts, v_set_velocity](self.Tensors[id].cap)
+
+                @parameter
+                fn v_update_data_sgdPlus[nelts: Int](index: Int):
+                    self.Tensors[id].data.simd_store[nelts](
+                        index, (1 - lr * weight_decay) * self.Tensors[id].data.simd_load[nelts](index) - self.Tensors[id].velocity.simd_load[nelts](index)
+                    )
+                vectorize[nelts, v_update_data_sgdPlus](self.Tensors[id].cap)
 
 
     @always_inline

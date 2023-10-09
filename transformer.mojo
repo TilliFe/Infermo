@@ -3,9 +3,10 @@ from random import random_float64, seed
 from memory import memset_zero
 from math import sqrt
 
-fn dataGenerator(inout inputs: Tensor, inout trueVals: Tensor, batch_size: Int, seq_len: Int, d_vocab: Int, ):
+##################### Transformer Neural Network (trained on an algorithmic (toy) dataset) ########################################
 
-    # ############### TOY DATASET: Add 1 to each number in a sequence. ###############
+# TOY DATASET: Add 1 to each number in a sequence.
+fn dataGenerator(inout inputs: Tensor, inout trueVals: Tensor, batch_size: Int, seq_len: Int, d_vocab: Int, ):
 
     # random sequence of integers in the range [0,d_vocab-1] - yet not oneHot encoded
     let input_raw = Pointer[Int].alloc(batch_size * seq_len * d_vocab)
@@ -37,8 +38,6 @@ fn dataGenerator(inout inputs: Tensor, inout trueVals: Tensor, batch_size: Int, 
     trueVals.setData(trueVals_data)
 
 fn main():
-
-    ##################### TRANSFORMER model (trained on toy dataset) #################
 
     # transformer config -> achieves high accuracy but very low confidence (high loss) -> fix?
     let use_attn=True

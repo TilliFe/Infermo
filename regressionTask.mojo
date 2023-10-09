@@ -2,6 +2,8 @@ from dv import *
 from math import sin
 from random import rand, seed
 
+###################### Simple MLP for a dd regression task ########################################################
+
 # define the model and its behaviour
 struct model:
     var nn: Module

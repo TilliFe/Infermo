@@ -291,14 +291,6 @@ fn CE_grad(C: Tensor, inout A: Tensor, inout B: Tensor): # A: TrueVals, B: Logit
     let num_dims = A.getNum_dims()
     let N = A.getShape(num_dims-1)
 
-    # for index in range(A.getCap()):
-    #     let grad = B.getData(index) - A.getData(index)
-    #     A.setGradient(index,  A.getGradient(index) +  grad /  (Float32(A.getCap()) / Float32(N)))))
-
-    # for index in range(B.getCap()):
-    #     let grad = B.getData(index) - A.getData(index)
-    #     B.setGradient(index,  B.getGradient(index) + grad / (Float32(A.getCap()) / Float32(N)))))
-
     if(A.requiresGradient):
         if(A.name == "softmax"):
             for index in range(A.getCap()):
@@ -322,8 +314,12 @@ fn CE_grad(C: Tensor, inout A: Tensor, inout B: Tensor): # A: TrueVals, B: Logit
 fn reshape_grad(B: Tensor, inout A: Tensor):
     for s in range(B.cap // A.cap):
         let offset = s * A.cap
-        for i in range(A.cap):
-            A.setGradient(i,  A.getGradient(i) + B.getGradient(offset + i))
+        @parameter
+        fn v_reshape[nelts: Int](i: Int):
+            A.gradient.simd_store[nelts](
+                i, A.gradient.simd_load[nelts](i) + B.gradient.simd_load[nelts](offset + i)
+            )
+        vectorize[nelts, v_reshape](A.cap)
 
 
 @always_inline

@@ -1,6 +1,6 @@
 from dv import *
 
-# ###### This convNet (conv2d + maxPool2d) implementation has just started, nothing to see here so far! ###########################################################
+# ######################### Convolutional Neural Network (trained on MNIST dataset) ###########################################################
 
 # define the model and its behaviour
 struct model:
@@ -20,11 +20,11 @@ struct model:
         self.avgAcc = 0
 
         # define model architecture
-        var x = self.nn.reshape(self.input,shape(64,1,28,28))                                                   # 64,1,28,28
-        x = Conv2d(self.nn,x,out_channels=4,kernel_width=4,kernel_height=4,stride=1,padding=0,use_bias=True)    # 64,4,24,24
-        x = self.nn.maxPool2d(x,kernel_width=6,kernel_height=6,stride=6,padding=0)                              # 64,4,4,4
-        x = self.nn.reshape(x,shape(64,64))                                                                     # 64,64
-        x = Linear(self.nn,x,16,True,'ReLU')                                                                    # 64,32
+        var x = self.nn.reshape(self.input,shape(self.input.shape[0],1,28,28))                                  # 64,1,28,28
+        x = Conv2d(self.nn,x,out_channels=4,kernel_width=5,kernel_height=5,stride=1,padding=0,use_bias=False)   # 64,4,24,24
+        x = self.nn.maxPool2d(x,kernel_width=4,kernel_height=4,stride=4,padding=0)                              # 64,4,6,6
+        x = self.nn.reshape(x,shape(64,144))                                                                    # 64,144
+        x = Linear(self.nn,x,64,True,'ReLU')                                                                    # 64,32
         x = Linear(self.nn,x,10,True,'none')
         self.logits = self.nn.softmax(x)
         self.loss = self.nn.CE(self.trueVals,self.logits)
@@ -51,7 +51,7 @@ struct model:
 
     @always_inline
     fn step(inout self):
-        self.nn.optimize('sgd_momentum', lr = 0.1, momentum = 0.9, weight_decay=0.001)
+        self.nn.optimize('sgd_momentum', lr = 0.01, momentum = 0.9, weight_decay=0.001,threshold=1.0)
 
 
 # train the model
@@ -61,10 +61,10 @@ fn main()raises:
     var dl = DataLoader('./dv/datasets/mnist.txt')
     var model = model()
 
-    let num_epochs = 10000
+    let num_epochs = 1000
     var lossSum: Float32 = 0
     var avgAcc: Float32 = 0
-    let every = 100
+    let every = 50
 
     for epoch in range(1,num_epochs+1):
         # load a batch of images into the model
@@ -80,10 +80,11 @@ fn main()raises:
             index=0,
             ndims=10
         )
-        let logits = model.forward(inputs,labels)
-        model.backward()
-        model.step()
 
+        # forward pass through the network
+        let logits = model.forward(inputs,labels)
+
+        # for progress measures only
         lossSum += model.loss.getData(0)
         avgAcc += model.avgAcc
         if( epoch % every == 0):
@@ -93,53 +94,8 @@ fn main()raises:
             # logits.printData()
             # model.trueVals.printData()
 
+        # compute the gradients
+        model.backward()
 
-# fn main():
-#     var nn = Module()
-
-#     var A = Tensor(shape(1,1,6,6))
-#     A.initRandn(1.0)
-
-#     var B = nn.maxPool2d(
-#             A=A,
-#             kernel_width=3,
-#             kernel_height=3,
-#             stride=1,
-#             padding=2
-#         )
-
-#     var C = nn.sum(B)
-
-#     nn.forward(C)
-#     nn.backward(C)
-
-#     nn.printTensors()
-
-
-
-
-
-# fn main():
-# 	var nn = Module()
-
-# 	var A = Tensor(shape(1,2,4,4))
-# 	A.setDataAll(0.1)
-	
-	# var B = Conv2d(
-	# 		nn=nn,
-	# 		x=A,
-	# 		out_channels=2,
-	# 		kernel_width=3,
-	# 		kernel_height=3,
-	# 		stride=1,
-	# 		padding=0,
-	# 		use_bias=True     
-	# 	)
-	
-	# var C = nn.sum(B)
-
-	# nn.forward(C)
-	# nn.backward(C)
-
-	# nn.printTensors()
-
+        # take an optimization step
+        model.step()
