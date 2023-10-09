@@ -2,22 +2,20 @@
 
 ### AutoDiff with Tensors in pure Mojo!
 
-* Training of **Transformers** and various Neural Network architectures.
 * Independence from external libraries.
 * Dynamic, object-oriented model definition
 * Automatic gradient computation.
-* Only a **1000 lines of code**: See how things work under the hood!
 
 Infermo is currently a Proof-of-Concept. While it’s mainly functional, it’s still under optimization and currently operates on CPU only.
 
-I am looking forward to your contributions. :)
-
-###
-![Alt text](./dv/datasets/image.png)
-
 ## Overview
 
-**Structs**:
+**High Level Operators**:
+- MLP, Linear Layer with ReLU activation
+- (masked) Transformer Block
+- 2d Convolution, Max Pooling (still naive implementation)
+
+**General Structs**:
 - **Tensor**: A Tensor is a multidimensional array. It is either a separate data holder or part of a computation graph (see Module).
 - **Module**: The Module is the Computation Graph and stores the relations between the Tensors (nodes).
 - **DataLoader**: The DataLoader reads in data from a .txt file (.csv coming soon). The read-in data is stored in a buffer. Batches of data get generated based on the specified sub-rows and sub-columns.
@@ -35,10 +33,6 @@ Operators include mul, add, sum, ReLU, softmax, reshape (broadcast), MSE, CE, tr
 - **forward(last_node: Tensor)**: Takes in one Tensor, computes one forward pass through the Network till the specified Tensor (compute node). Returns none.
 - **backward(last_node: Tensor)**: Takes in one Tensor, computes the gradients of the last Tensor (here: last_node) with respect to all prior Tensors (compute nodes). Returns none.
 - **optimize("optimization_algorithm",learning_rate,momentum)**: Optimizes the entire network where the gradients are known. Returns none.
-
-**Abstractions**:
-- Linear: A linear Transformation with a ReLU activation, used for a simple MLP.
-- Transformer: Implements a simple encoder neural network like GPT. We tested it on a small algorithmic dataset (bitshifting).
 
 A more detailed overview is on its way. Stay tuned! 😊
 
