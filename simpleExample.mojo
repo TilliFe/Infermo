@@ -1,25 +1,25 @@
-from dv import Module, Tensor, shape, Linear, max, accuracy, DataLoader
+from dv import Module, Tensor, shape
 
-################### Random example: Compute Gradients automatically ##############################################
+################### Random example: compute Gradients automatically ##############################################
 fn main():
     # init
     var nn = Module()
-    var A = Tensor(shape(2,5,3))
-    var B = Tensor(shape(2,3,4))
+    var a = Tensor(shape(2,5,3))
+    var b = Tensor(shape(2,3,4))
 
     # specify tensor entries
-    A.setDataAll(2)
-    B.setDataAll(3)
+    a.fill(2)
+    b.fill(3)
 
     # perform computation 
-    var C = nn.mul(A,B)
-    var D = nn.sum(C) # compute sum, since the gradient can only be computed of a scalar value
-    nn.forward(C)
+    var c = nn.mul(a,b)
+    var D = nn.sum(c) # compute sum, since the grad can only be computed of a scalar value
+    nn.forward(c)
 
     # print result of matrix multiplication
-    C.printData()
+    c.print_data()
 
-    # compute gradients of A and B
+    # compute grads of a and b
     nn.backward(D)
-    A.printGradient()
-    B.printGradient()
+    a.print_grad()
+    b.print_grad()

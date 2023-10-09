@@ -1,28 +1,28 @@
-from dv import *
+from dv import Tensor,Module,shape,transformer_block,embed,unembed,max,accuracy
 from random import random_float64, seed
 from memory import memset_zero
 from math import sqrt
 
 ##################### Transformer Neural Network (trained on an algorithmic (toy) dataset) ########################################
 
-# TOY DATASET: Add 1 to each number in a sequence.
-fn dataGenerator(inout inputs: Tensor, inout trueVals: Tensor, batch_size: Int, seq_len: Int, d_vocab: Int, ):
+# TOY DaTaSET: add 1 to each number in a sequence.
+fn data_generator(inout inputs: Tensor, inout true_vals: Tensor, batch_size: Int, seq_len: Int, d_vocab: Int):
 
     # random sequence of integers in the range [0,d_vocab-1] - yet not oneHot encoded
     let input_raw = Pointer[Int].alloc(batch_size * seq_len * d_vocab)
-    let trueVals_raw = Pointer[Int].alloc(batch_size * seq_len * d_vocab)
+    let true_vals_raw = Pointer[Int].alloc(batch_size * seq_len * d_vocab)
     for batch in range(batch_size):
         for seq in range(seq_len):
             seed()
             input_raw.store(batch * seq_len + seq, random_float64(0,Float64(d_vocab)).to_int())
-            trueVals_raw.store(batch * seq_len + seq, (input_raw.load(batch * seq_len + seq) + 1 ) % d_vocab)
+            true_vals_raw.store(batch * seq_len + seq, (input_raw.load(batch * seq_len + seq) + 1 ) % d_vocab)
 
     # init to zero
     let size = batch_size * seq_len * d_vocab
     let input_data = DTypePointer[DType.float32].alloc(size)
-    let trueVals_data = DTypePointer[DType.float32].alloc(size)
+    let true_vals_data = DTypePointer[DType.float32].alloc(size)
     memset_zero(input_data,size)
-    memset_zero(trueVals_data,size)
+    memset_zero(true_vals_data,size)
 
     # create a oneHot encoding of indeces in the input_data - current task: bitshift to the right by one
     for batch in range(batch_size):
@@ -30,12 +30,12 @@ fn dataGenerator(inout inputs: Tensor, inout trueVals: Tensor, batch_size: Int, 
             let input_index = input_raw.load(batch * seq_len + seq)
             input_data.store(batch * seq_len * d_vocab + seq * d_vocab + input_index, Float32(1.0))
 
-            let trueVals_index = trueVals_raw.load(batch * seq_len + seq)
-            trueVals_data.store(batch * seq_len * d_vocab + seq * d_vocab + trueVals_index, Float32(1.0))
+            let true_vals_index = true_vals_raw.load(batch * seq_len + seq)
+            true_vals_data.store(batch * seq_len * d_vocab + seq * d_vocab + true_vals_index, Float32(1.0))
 
-    # fill input and trueVals Tensors with new data
-    inputs.setData(input_data)
-    trueVals.setData(trueVals_data)
+    # fill input and true_vals tensors with new data
+    inputs.set_data(input_data)
+    true_vals.set_data(true_vals_data)
 
 fn main():
 
@@ -44,13 +44,13 @@ fn main():
     let use_mlp=True
     let num_layers=2
     let num_heads=4
-    let d_model=64
+    let d_Model=64
     let d_mlp=64
-    let d_head=d_model//num_heads
+    let d_head=d_Model//num_heads
     let d_vocab=32
     let n_ctx=16
     let seq_len=n_ctx
-    let init_std = Float32(0.1)/sqrt(d_model)   # re: weight initalization - currently works better with smaller standard deviation, used for all weights
+    let init_std = Float32(0.1)/sqrt(d_Model)   # re: weight initalization - currently works better with smaller standard deviation, used for all weights
     let batch_size=32
 
     # training config
@@ -59,21 +59,21 @@ fn main():
     let lr = 0.0003
     let momentum = 0.8
     let wd = 0.01               # weight decay for better generalization
-    let th = 1.0                # gradient clipping threshold
+    let th = 1.0                # grad clipping threshold
 
     # init
     var nn = Module()
     var inputs = Tensor(shape(batch_size,seq_len,d_vocab))
-    inputs.requiresGradient = False
-    var trueVals = Tensor(shape(batch_size,seq_len,d_vocab))
-    trueVals.requiresGradient = False
+    inputs.requires_grad = False
+    var true_vals = Tensor(shape(batch_size,seq_len,d_vocab))
+    true_vals.requires_grad = False
     
     # architecture of a n layer Transformer
-    var x = Embed(nn,d_vocab,d_model,batch_size,init_std,inputs)
+    var x = embed(nn,d_vocab,d_Model,batch_size,init_std,inputs)
     for layer in range(num_layers):
-        x = TransformerBlock(
+        x = transformer_block(
             nn=nn,
-            d_model=d_model,
+            d_Model=d_Model,
             num_heads=num_heads,
             d_head=d_head,
             n_ctx=n_ctx,
@@ -85,35 +85,35 @@ fn main():
             init_std=init_std,
             x=x
         )  
-    x = Unembed(nn,d_vocab,d_model,batch_size,init_std,x)  
+    x = unembed(nn,d_vocab,d_Model,batch_size,init_std,x)  
     var logits = nn.softmax(x)
-    var loss = nn.CE(trueVals,logits)
+    var loss = nn.cE(true_vals,logits)
 
     # training loop
-    var avgAcc: Float32 = 0.0
+    var avg_acc: Float32 = 0.0
     var avgLoss: Float32 = 0.0
 
     for epoch in range(1,num_epochs+1):
 
         # feed the network with fresh innput data and the respective labels
-        dataGenerator(inputs,trueVals,batch_size,seq_len,d_vocab)
+        data_generator(inputs,true_vals,batch_size,seq_len,d_vocab)
 
         # forward pass through the network
         nn.forward(loss)
 
         # print out stuff, not important to the learning procedure
         let res = max(logits)
-        avgAcc += accuracy(res,trueVals)
-        avgLoss += loss.getData(0)
+        avg_acc += accuracy(res,true_vals)
+        avgLoss += loss.data.load(0)
         if(epoch % every == 0):
-            print("Epoch:",epoch, ", Loss:", avgLoss/every, ", avgAcc:", avgAcc/every)
-            avgAcc = 0.0
+            print("Epoch:",epoch, ", Loss:", avgLoss/every, ", avg_acc:", avg_acc/every)
+            avg_acc = 0.0
             avgLoss = 0.0
-            # inputs.printData()
-            # trueVals.printData()
-            # res.printData()
+            # inputs.print_data()
+            # true_vals.print_data()
+            # res.print_data()
         
-        # compute gradients
+        # compute grads
         nn.backward(loss)
 
         # take a optimization step

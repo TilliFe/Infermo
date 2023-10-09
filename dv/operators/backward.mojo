@@ -12,324 +12,324 @@ from ..graph.tensor import Tensor
 alias nelts = simdwidthof[DType.float32]()
 
 @always_inline
-fn mul_grad(C: Tensor, inout A: Tensor, inout B: Tensor):
+fn mul_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
 
-    let A_matrix_size = A.shape[A.num_dims-2] * A.shape[A.num_dims-1]
-    let B_matrix_size = B.shape[B.num_dims-2] * B.shape[B.num_dims-1]
-    let C_matrix_size = C.shape[C.num_dims-2] * C.shape[C.num_dims-1] 
+    let a_matrix_size = a.shape[a.num_dims-2] * a.shape[a.num_dims-1]
+    let b_matrix_size = b.shape[b.num_dims-2] * b.shape[b.num_dims-1]
+    let c_matrix_size = c.shape[c.num_dims-2] * c.shape[c.num_dims-1] 
 
-    let M = A.shape[A.num_dims-2]
-    let K = B.shape[B.num_dims-2]
-    let N = B.shape[B.num_dims-1]
+    let M = a.shape[a.num_dims-2]
+    let K = b.shape[b.num_dims-2]
+    let N = b.shape[b.num_dims-1]
 
-    var offset_A: Int = 0
-    var offset_B: Int = 0
-    var offset_C: Int = 0
+    var offset_a: Int = 0
+    var offset_b: Int = 0
+    var offset_c: Int = 0
 
-    for s in range(C.getCap() // C_matrix_size):
+    for s in range(c.cap // c_matrix_size):
 
-        offset_C = s * C_matrix_size
+        offset_c = s * c_matrix_size
 
         # consider broadcasting
-        if(A.num_dims == B.num_dims):
-            offset_A = s * A_matrix_size
-            offset_B = s * B_matrix_size
-        elif(A.num_dims > B.num_dims):
-            offset_A = s * A_matrix_size
+        if(a.num_dims == b.num_dims):
+            offset_a = s * a_matrix_size
+            offset_b = s * b_matrix_size
+        elif(a.num_dims > b.num_dims):
+            offset_a = s * a_matrix_size
         else:
-            offset_B = s * B_matrix_size
+            offset_b = s * b_matrix_size
 
-        if (A.getRequiresGradient()):
+        if (a.requires_grad):
             @parameter
             fn calc_row_1(m: Int):
                 for n in range(N):
                     @parameter
                     fn dot[nelts: Int](k: Int):
-                        let index_A = offset_A + m * K + k
-                        let index_C = offset_C + m * N + n
-                        let index_B = offset_B + k * N + n
-                        let a = A.getGradient(index_A) + C.getGradient(index_C) * B.getData(index_B) 
-                        A.setGradient(index_A, a)
+                        let index_a = offset_a + m * K + k
+                        let index_c = offset_c + m * N + n
+                        let index_b = offset_b + k * N + n
+                        let val = a.grad.load(index_a) + c.grad.load(index_c) * b.data.load(index_b) 
+                        a.grad.store(index_a, val)
                     vectorize[nelts, dot](K)
             parallelize[calc_row_1](M,M)
 
-        if(B.requiresGradient):
+        if(b.requires_grad):
             @parameter
             fn calc_row_2(k: Int):
                 for m in range(M):
                     @parameter
                     fn dot[nelts: Int](n: Int):
-                        let index_B = offset_B + k * N + n
-                        let index_A = offset_A + m * K + k
-                        let index_C = offset_C + m * N + n
-                        let b = B.getGradient(index_B) + A.getData(index_A) * C.getGradient(index_C)  
-                        B.setGradient(index_B, b)
+                        let index_b = offset_b + k * N + n
+                        let index_a = offset_a + m * K + k
+                        let index_c = offset_c + m * N + n
+                        let val = b.grad.load(index_b) + a.data.load(index_a) * c.grad.load(index_c)  
+                        b.grad.store(index_b, val)
                     vectorize[nelts, dot](N)
             parallelize[calc_row_2](K,K)
 
 @always_inline        
-fn add_grad(C: Tensor, inout A: Tensor, inout B: Tensor):
+fn add_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
 
     # regular
-    if(A.num_dims == B.num_dims):
-        if(A.requiresGradient):
+    if(a.num_dims == b.num_dims):
+        if(a.requires_grad):
             @parameter
             fn v_add_gr_1[nelts: Int](i: Int):
-                A.gradient.simd_store[nelts](
-                    i, A.gradient.simd_load[nelts](i) + C.gradient.simd_load[nelts](i)
+                a.grad.simd_store[nelts](
+                    i, a.grad.simd_load[nelts](i) + c.grad.simd_load[nelts](i)
                 )
-            vectorize[nelts, v_add_gr_1](A.getCap())
-        if(B.requiresGradient):
+            vectorize[nelts, v_add_gr_1](a.cap)
+        if(b.requires_grad):
             @parameter
             fn v_add_gr_2[nelts: Int](i: Int):
-                B.gradient.simd_store[nelts](
-                    i, B.gradient.simd_load[nelts](i) + C.gradient.simd_load[nelts](i)
+                b.grad.simd_store[nelts](
+                    i, b.grad.simd_load[nelts](i) + c.grad.simd_load[nelts](i)
                 )
-            vectorize[nelts, v_add_gr_2](B.getCap())
+            vectorize[nelts, v_add_gr_2](b.cap)
 
     # consider broadcasting
     else:
-        var offset_A: Int = 0
-        var offset_B: Int = 0
-        var offset_C: Int = 0
+        var offset_a: Int = 0
+        var offset_b: Int = 0
+        var offset_c: Int = 0
         var ratio: Int = 0
         var H = 0
 
-        if(A.num_dims > B.num_dims):
-            H = B.cap
-            ratio = A.cap // B.cap
+        if(a.num_dims > b.num_dims):
+            H = b.cap
+            ratio = a.cap // b.cap
         else:
-            H = A.cap
-            ratio = B.cap // A.cap
+            H = a.cap
+            ratio = b.cap // a.cap
 
         for s in range(ratio):
-            if(A.num_dims > B.num_dims):
-                offset_A = s * H
+            if(a.num_dims > b.num_dims):
+                offset_a = s * H
             else:
-                offset_B = s * H
+                offset_b = s * H
 
-            offset_C = s * H
-            if(A.requiresGradient):
+            offset_c = s * H
+            if(a.requires_grad):
                 @parameter
-                fn v_add_A[nelts: Int](i: Int):
-                    A.gradient.simd_store[nelts](
-                        offset_A + i, A.gradient.simd_load[nelts](offset_A + i) + C.gradient.simd_load[nelts](offset_C + i)
+                fn v_add_a[nelts: Int](i: Int):
+                    a.grad.simd_store[nelts](
+                        offset_a + i, a.grad.simd_load[nelts](offset_a + i) + c.grad.simd_load[nelts](offset_c + i)
                     )
-                vectorize[nelts, v_add_A](H) 
+                vectorize[nelts, v_add_a](H) 
 
-            if(B.requiresGradient):
+            if(b.requires_grad):
                 @parameter
-                fn v_add_B[nelts: Int](i: Int):
-                    B.gradient.simd_store[nelts](
-                        offset_B + i, B.gradient.simd_load[nelts](offset_B + i) + C.gradient.simd_load[nelts](offset_C + i)
+                fn v_add_b[nelts: Int](i: Int):
+                    b.grad.simd_store[nelts](
+                        offset_b + i, b.grad.simd_load[nelts](offset_b + i) + c.grad.simd_load[nelts](offset_c + i)
                     )
-                vectorize[nelts, v_add_B](H) 
+                vectorize[nelts, v_add_b](H) 
 
     # # Loop over each image in the batch
-    # for i in range(A.shape[0]):
+    # for i in range(a.shape[0]):
     #     # Loop over each filter
-    #     for j in range(C.shape[0]):
+    #     for j in range(c.shape[0]):
     #         # Loop over each channel
-    #         for x in range(B.shape[2]):
-    #             for y in range(B.shape[3]):
+    #         for x in range(b.shape[2]):
+    #             for y in range(b.shape[3]):
     #                 var patch_sum: Float32 = 0.0
 
-    #                 # Apply the convolution operation - vectorize?
-    #                 for k in range(A.shape[1]):
-    #                 # Convolve the k-th channel of the i-th image with the k-th channel of the j-th filter
-    #                     for dx in range(C.shape[2]):
-    #                         for dy in range(C.shape[3]):                        
-    #                             # Calculate input indices with consideration for padding and stride
+    #                 # apply the convolution operation - vectorize?
+    #                 for k in range(a.shape[1]):
+    #                 # convolve the k-th channel of the i-th image with the k-th channel of the j-th filter
+    #                     for dx in range(c.shape[2]):
+    #                         for dy in range(c.shape[3]):                        
+    #                             # calculate input indices with consideration for padding and stride
     #                             let ix = x * stride - padding + dx
     #                             let iy = y * stride - padding + dy
     #                             # Skip if index is out of bounds (this is 'zero' padding)
-    #                             if ix < 0 or iy < 0 or ix >= A.shape[2] or iy >= A.shape[3]:
+    #                             if ix < 0 or iy < 0 or ix >= a.shape[2] or iy >= a.shape[3]:
     #                                 continue
-    #                             let A_index = index(j, k, ix, iy, A.shape[1], A.shape[2], A.shape[3])
-    #                             let C_gradient_index = index(i, k, dx, dy, A.shape[1], C.shape[2], C.shape[3])
-    #                             # Add to patch sum
-    #                             patch_sum += A.data.load(A_index) * C.gradient.load(C_gradient_index)
+    #                             let a_index = index(j, k, ix, iy, a.shape[1], a.shape[2], a.shape[3])
+    #                             let c_grad_index = index(i, k, dx, dy, a.shape[1], c.shape[2], c.shape[3])
+    #                             # add to patch sum
+    #                             patch_sum += a.data.load(a_index) * c.grad.load(c_grad_index)
 
-    #                 # Store patch sum into C after innermost loops
-    #                 let B_gradient_index = index(i, j, x, y, C.shape[0], B.shape[2], B.shape[3])
-    #                 B.gradient.store(B_gradient_index, B.gradient.load(B_gradient_index) + patch_sum)
+    #                 # Store patch sum into c after innermost loops
+    #                 let b_grad_index = index(i, j, x, y, c.shape[0], b.shape[2], b.shape[3])
+    #                 b.grad.store(b_grad_index, b.grad.load(b_grad_index) + patch_sum)
 
 
 @always_inline
-fn conv2d_grad(C: Tensor, inout A: Tensor, inout B: Tensor):
+fn conv_2d_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
   
-    let padding = C.otherParams.load(0)
-    let stride = C.otherParams.load(1)
+    let padding = c.other_params.load(0)
+    let stride = c.other_params.load(1)
 
     # Function to calculate the index in the 1D buffer
     fn index(n: Int, c: Int, h: Int, w: Int, num_channels: Int, width: Int, height: Int) -> Int:
         return n*(num_channels*height*width) + c*(height*width) + h*width + w
 
     # ##### compute the gradietn of the Kernel (right tensor) ########################################
-    for i in range(A.shape[1]): # in_channels
-        for j in range(B.shape[0]): # out_channels
-            for x in range(B.shape[2]): # kernel_width
-                for y in range(B.shape[3]): # kernel_height
+    for i in range(a.shape[1]): # in_channels
+        for j in range(b.shape[0]): # out_channels
+            for x in range(b.shape[2]): # kernel_width
+                for y in range(b.shape[3]): # kernel_height
                     var patch_sum: Float32 = 0.0
-                    for b in range(A.shape[0]):
-                        for dx in range(C.shape[2]):
-                            for dy in range(C.shape[3]):                        
-                                # Calculate input indices with consideration for padding and stride
+                    for b in range(a.shape[0]):
+                        for dx in range(c.shape[2]):
+                            for dy in range(c.shape[3]):                        
+                                # calculate input indices with consideration for padding and stride
                                 let ix = x * stride - padding + dx
                                 let iy = y * stride - padding + dy
                                 # Skip if index is out of bounds (this is 'zero' padding)
-                                if ix < 0 or iy < 0 or ix >= A.shape[2] or iy >= A.shape[3]:
+                                if ix < 0 or iy < 0 or ix >= a.shape[2] or iy >= a.shape[3]:
                                     continue
-                                let A_index = index(b, i, ix, iy, A.shape[1], A.shape[2], A.shape[3])
-                                let C_gradient_index = index(b, j, dx, dy, C.shape[1], C.shape[2], C.shape[3])
-                                # Add to patch sum
-                                patch_sum += A.data.load(A_index) * C.gradient.load(C_gradient_index)
-                    let B_gradient_index = index(i, j, x, y, B.shape[0], B.shape[2], B.shape[3])
-                    B.gradient.store(B_gradient_index, patch_sum)
+                                let a_index = index(b, i, ix, iy, a.shape[1], a.shape[2], a.shape[3])
+                                let c_grad_index = index(b, j, dx, dy, c.shape[1], c.shape[2], c.shape[3])
+                                # add to patch sum
+                                patch_sum += a.data.load(a_index) * c.grad.load(c_grad_index)
+                    let b_grad_index = index(i, j, x, y, b.shape[0], b.shape[2], b.shape[3])
+                    b.grad.store(b_grad_index, patch_sum)
 
     # ##### compute the gradietn of the Input (left tensor) ############################################
-    for b in range(A.shape[0]): # batch_size
-        for j in range(A.shape[1]): # in_channels
-            for i in range(B.shape[0]): # out_channels
-                for x in range(A.shape[2]):
-                    for y in range(A.shape[3]):
+    for p in range(a.shape[0]): # batch_size
+        for j in range(a.shape[1]): # in_channels
+            for i in range(b.shape[0]): # out_channels
+                for x in range(a.shape[2]):
+                    for y in range(a.shape[3]):
                         var patch_sum : Float32 = 0.0
-                        for dx in range(B.shape[2]):
-                            for dy in range(B.shape[3]):
+                        for dx in range(b.shape[2]):
+                            for dy in range(b.shape[3]):
                                 let ix = x * stride - dx + padding
                                 let iy = y * stride - dy + padding
                                 # Skip if index is out of bounds (this is 'zero' padding)
-                                if ix < 0 or iy < 0 or ix >= C.shape[2] or iy >= C.shape[3]:
+                                if ix < 0 or iy < 0 or ix >= c.shape[2] or iy >= c.shape[3]:
                                     continue
-                                let C_gradient_index = index(b,i,ix,iy,C.shape[1],C.shape[2],C.shape[3])
-                                let B_index = index(i,j,B.shape[2]-dx-1,B.shape[3]-dy-1,B.shape[1],B.shape[2],B.shape[3])
-                                patch_sum += C.gradient.load(C_gradient_index) * B.data.load(B_index)
-                        let A_gradient_index = index(b,j,x,y,A.shape[1],A.shape[2],A.shape[3])
-                        A.gradient.store( A_gradient_index, A.gradient.load(A_gradient_index) + patch_sum)
+                                let c_grad_index = index(p,i,ix,iy,c.shape[1],c.shape[2],c.shape[3])
+                                let b_index = index(i,j,b.shape[2]-dx-1,b.shape[3]-dy-1,b.shape[1],b.shape[2],b.shape[3])
+                                patch_sum += c.grad.load(c_grad_index) * b.data.load(b_index)
+                        let a_grad_index = index(p,j,x,y,a.shape[1],a.shape[2],a.shape[3])
+                        a.grad.store( a_grad_index, a.grad.load(a_grad_index) + patch_sum)
 
 
 @always_inline
-fn maxPool2d_grad(B: Tensor, inout A: Tensor):
+fn max_pool_2d_grad(b: Tensor, inout a: Tensor):
 
-    let padding = B.otherParams.load(0)
-    let stride = B.otherParams.load(1)
-    let kernel_width = B.otherParams.load(2)
-    let kernel_height = B.otherParams.load(3)
+    let padding = b.other_params.load(0)
+    let stride = b.other_params.load(1)
+    let kernel_width = b.other_params.load(2)
+    let kernel_height = b.other_params.load(3)
 
     # Function to calculate the index in the 1D buffer
     fn index(n: Int, c: Int, h: Int, w: Int, num_channels: Int, width: Int, height: Int) -> Int:
         return n*(num_channels*height*width) + c*(height*width) + h*width + w
 
-    for b in range(A.shape[0]): # batch_size
-        for i in range(A.shape[1]): # in_channels
-            for x in range(0,A.shape[2]-kernel_width+1 + 2*padding,stride): # width
-                for y in range(0,A.shape[3]-kernel_height+1 + 2*padding,stride): # height
+    for p in range(a.shape[0]): # batch_size
+        for i in range(a.shape[1]): # in_channels
+            for x in range(0,a.shape[2]-kernel_width+1 + 2*padding,stride): # width
+                for y in range(0,a.shape[3]-kernel_height+1 + 2*padding,stride): # height
                     var arg_max: Int = 0
                     var max_val: Float32 = -1000000.0
                     for dx in range(kernel_width):
                         for dy in range(kernel_height):
                             let ix = x - padding + dx
                             let iy = y - padding + dy
-                            if ix < 0 or iy < 0 or ix >= A.shape[2] or iy >= A.shape[3]:
+                            if ix < 0 or iy < 0 or ix >= a.shape[2] or iy >= a.shape[3]:
                                 continue
-                            let idx = index(b,i,ix,iy,A.shape[1],A.shape[2],A.shape[3])
-                            let entry = A.data.load(idx)
+                            let idx = index(p,i,ix,iy,a.shape[1],a.shape[2],a.shape[3])
+                            let entry = a.data.load(idx)
                             if(entry > max_val):
                                 max_val = entry
                                 arg_max = idx
-                    let B_grad_idx = index(b,i,(x)//stride,(y)//stride,B.shape[1],B.shape[2],B.shape[3])
-                    A.gradient.store(arg_max, A.gradient.load(arg_max) + B.gradient.load(B_grad_idx))
+                    let b_grad_idx = index(p,i,(x)//stride,(y)//stride,b.shape[1],b.shape[2],b.shape[3])
+                    a.grad.store(arg_max, a.grad.load(arg_max) + b.grad.load(b_grad_idx))
 
 @always_inline
-fn ReLU_grad(B: Tensor, inout A: Tensor):
+fn relu_grad(b: Tensor, inout a: Tensor):
     @parameter
     fn v_relu_bw[nelts: Int](i: Int):
         let zeros = SIMD[DType.float32,nelts]()
-        A.gradient.simd_store[nelts](
-            i, (A.data.simd_load[nelts](i) > zeros).cast[DType.float32]() * B.gradient.simd_load[nelts](i) + A.gradient.simd_load[nelts](i)
+        a.grad.simd_store[nelts](
+            i, (a.data.simd_load[nelts](i) > zeros).cast[DType.float32]() * b.grad.simd_load[nelts](i) + a.grad.simd_load[nelts](i)
         )
-    vectorize[nelts, v_relu_bw](A.getCap())
+    vectorize[nelts, v_relu_bw](a.cap)
 
 @always_inline
-fn sum_grad(B: Tensor, inout A: Tensor):
-    A.setGradientAll(1)
+fn sum_grad(b: Tensor, inout a: Tensor):
+    a.fill_grad(1)
 
 @always_inline
-fn softmax_grad(B: Tensor, inout A: Tensor): 
-    if(B.otherParams.load(0) == 3001):
-        A.setGradient(B.getGradient())
+fn softmax_grad(b: Tensor, inout a: Tensor): 
+    if(b.other_params.load(0) == 3001):
+        a.set_grad(b.grad)
     else:
-        let num_dims = B.getNum_dims()
-        let M = B.getShape(num_dims-2)
-        let N = B.getShape(num_dims-1)
-        for s in range(B.getCap() // N):
+        let num_dims = b.num_dims
+        let M = b.shape[num_dims-2]
+        let N = b.shape[num_dims-1]
+        for s in range(b.cap // N):
             let offset = s * N
             for j in range(N):
                 var grad: Float32 = 0
                 for i in range(N):
                     if(i == j):
-                        grad += B.getGradient(offset + i) * ( B.getData(offset + j) * (Float32(1.0) - B.getData(offset + j)) )
+                        grad += b.grad.load(offset + i) * ( b.data.load(offset + j) * (Float32(1.0) - b.data.load(offset + j)) )
                     else:
-                        grad -= B.getGradient(offset + i)  * B.getData(offset + i) * B.getData(offset + j)
-                A.setGradient(offset + j,  A.gradient.load(offset + j) + grad)
+                        grad -= b.grad.load(offset + i)  * b.data.load(offset + i) * b.data.load(offset + j)
+                a.set_grad(offset + j,  a.grad.load(offset + j) + grad)
 
 @always_inline
-fn MSE_grad(C: Tensor, inout A: Tensor, inout B: Tensor): # A: TrueVals, B: Logits
-    let num_dims = A.getNum_dims()
-    let M = A.getShape(num_dims-2)
-    let N = A.getShape(num_dims-1)
+fn mse_grad(c: Tensor, inout a: Tensor, inout b: Tensor): # a: TrueVals, b: Logits
+    let num_dims = a.num_dims
+    let M = a.shape[num_dims-2]
+    let N = a.shape[num_dims-1]
 
-    for index in range(A.getCap()):
-        let grad = Float32(2) * (B.getData(index) - A.getData(index)) / Float32(A.getCap())
-        if(A.requiresGradient):
-            A.setGradient(index, A.getGradient(index) + grad) 
-        if(B.requiresGradient):
-            B.setGradient(index, B.getGradient(index) + grad) 
+    for index in range(a.cap):
+        let grad = Float32(2) * (b.data.load(index) - a.data.load(index)) / Float32(a.cap)
+        if(a.requires_grad):
+            a.grad.store(index, a.grad.load(index) + grad) 
+        if(b.requires_grad):
+            b.grad.store(index, b.grad.load(index) + grad) 
 
 @always_inline
-fn CE_grad(C: Tensor, inout A: Tensor, inout B: Tensor): # A: TrueVals, B: Logits
-    let num_dims = A.getNum_dims()
-    let N = A.getShape(num_dims-1)
+fn cE_grad(c: Tensor, inout a: Tensor, inout b: Tensor): # a: TrueVals, b: Logits
+    let num_dims = a.num_dims
+    let N = a.shape[num_dims-1]
 
-    if(A.requiresGradient):
-        if(A.name == "softmax"):
-            for index in range(A.getCap()):
-                let grad = (B.getData(index) - A.getData(index)) 
-                A.setGradient(index,  A.getGradient(index) +  grad /  (Float32(A.getCap()) / Float32(N)))
+    if(a.requires_grad):
+        if(a.name == "softmax"):
+            for index in range(a.cap):
+                let grad = (b.data.load(index) - a.data.load(index)) 
+                a.grad.store(index,  a.grad.load(index) +  grad /  (Float32(a.cap) / Float32(N)))
             else:
-                for index in range(A.getCap()):
-                    let grad_A = - log(B.getData(index))
-                    A.setGradient(index,  A.getGradient(index) +  grad_A / (Float32(A.getCap()) / Float32(N)))
-    if(B.requiresGradient):
-        if(B.name == "softmax"):
-            for index in range(B.getCap()):
-                let grad = (B.getData(index) - A.getData(index)) 
-                B.setGradient(index,  B.getGradient(index) + grad / (Float32(A.getCap()) / Float32(N)))
+                for index in range(a.cap):
+                    let grad_a = - log(b.data.load(index))
+                    a.grad.store(index,  a.grad.load(index) +  grad_a / (Float32(a.cap) / Float32(N)))
+    if(b.requires_grad):
+        if(b.name == "softmax"):
+            for index in range(b.cap):
+                let grad = (b.data.load(index) - a.data.load(index)) 
+                b.grad.store(index,  b.grad.load(index) + grad / (Float32(a.cap) / Float32(N)))
         else:
-            for index in range(B.getCap()):
-                let grad_B = - A.getData(index) / (B.getData(index))
-                B.setGradient(index,  B.getGradient(index) + grad_B / (Float32(A.getCap()) / Float32(N)))
+            for index in range(b.cap):
+                let grad_b = - a.data.load(index) / (b.data.load(index))
+                b.grad.store(index,  b.grad.load(index) + grad_b / (Float32(a.cap) / Float32(N)))
 
 @always_inline
-fn reshape_grad(B: Tensor, inout A: Tensor):
-    for s in range(B.cap // A.cap):
-        let offset = s * A.cap
+fn reshape_grad(b: Tensor, inout a: Tensor):
+    for s in range(b.cap // a.cap):
+        let offset = s * a.cap
         @parameter
         fn v_reshape[nelts: Int](i: Int):
-            A.gradient.simd_store[nelts](
-                i, A.gradient.simd_load[nelts](i) + B.gradient.simd_load[nelts](offset + i)
+            a.grad.simd_store[nelts](
+                i, a.grad.simd_load[nelts](i) + b.grad.simd_load[nelts](offset + i)
             )
-        vectorize[nelts, v_reshape](A.cap)
+        vectorize[nelts, v_reshape](a.cap)
 
 
 @always_inline
-fn transpose_grad(B: Tensor, inout A: Tensor):
-    let num_dims = B.getNum_dims()
-    let M = B.getShape(num_dims-2)
-    let N = B.getShape(num_dims-1)
+fn transpose_grad(b: Tensor, inout a: Tensor):
+    let num_dims = b.num_dims
+    let M = b.shape[num_dims-2]
+    let N = b.shape[num_dims-1]
 
-    for s in range(B.getCap() // (M*N)):
+    for s in range(b.cap // (M*N)):
         let offset = s * M * N
         for i in range(M):
             for j in range(N):
-                A.setGradient(offset + j * M + i,  A.getGradient(offset + j * M + i) + B.getGradient(offset + i * N + j))
+                a.set_grad(offset + j * M + i,  a.grad.load(offset + j * M + i) + b.grad.load(offset + i * N + j))

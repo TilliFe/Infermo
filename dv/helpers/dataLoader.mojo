@@ -54,9 +54,6 @@ struct DataLoader:
         for i in range(size):
             self.data.store(i, vec[i])
         vec.clear()
-
-        # print(rows)
-        # print(cols)
         
         self.rows = rows 
         self.cols = cols
@@ -65,72 +62,59 @@ struct DataLoader:
         seed()
         randint[DType.int32](self.indeces,self.rows,0,self.rows-1)
     
-    fn load(inout self, batchSize: Int, start: Int, end: Int, scalingFactor: Float32 = Float32(1.0)) raises -> DTypePointer[DType.float32]:
-        # print(self.counter)
+    fn load(inout self, batch_size: Int, start: Int, end: Int, scalingFactor: Float32 = Float32(1.0)) raises -> DTypePointer[DType.float32]:
         var _start = start
         var _end = end
-        let _batchSize = batchSize
+        let _batch_size = batch_size
         if(_start < 0):
             _start = 0
         if(_end>self.cols):
             _end = self.cols
 
-        let batch = DTypePointer[DType.float32].alloc(_batchSize * (_end - _start))
-        if(_batchSize < self.rows and _batchSize * (self.counter+1) < self.rows):
+        let batch = DTypePointer[DType.float32].alloc(_batch_size * (_end - _start))
+        if(_batch_size < self.rows and _batch_size * (self.counter+1) < self.rows):
             self.counter += 1
-            for i in range(_batchSize):
-                let sampleIndex = self.indeces.load((self.counter-1) * _batchSize + i).to_int()
+            for i in range(_batch_size):
+                let sampleIndex = self.indeces.load((self.counter-1) * _batch_size + i).to_int()
                 for j in range(_start,_end):
                     batch.store(i * (_end-_start) + j - _start, scalingFactor * self.data.load(sampleIndex * self.cols + j))
-        elif(_batchSize < self.rows):
+        elif(_batch_size < self.rows):
             seed()
             randint[DType.int32](self.indeces,self.rows,0,self.rows-1)
             self.counter = 1
-            for i in range(_batchSize):
-                let sampleIndex = self.indeces.load((self.counter-1) * _batchSize + i).to_int()
+            for i in range(_batch_size):
+                let sampleIndex = self.indeces.load((self.counter-1) * _batch_size + i).to_int()
                 for j in range(_start,_end):
                     batch.store(i * (_end-_start) + j - _start, scalingFactor * self.data.load(sampleIndex * self.cols + j))
         else:
-            print("Error: BatchSize exceeds the number of samples in the data set!")
-
-        # if(self.counter == 0):
-        #     for i in range(_batchSize):
-        #         for j in range(0,_end-_start):
-        #             if((_end-_start) > 30 and j >=10 and j <= ((_end-_start) - 10)):
-        #                 if(j == 10):
-        #                     print_no_newline("... ")
-        #                 continue
-        #             else:
-        #                 print_no_newline(batch.load(i * (_end-_start) + j), '')
-        #         put_new_line()
-        #     put_new_line()
+            print("Error: batch_size exceeds the number of samples in the data set!")
 
         return batch
 
-    fn load_again(inout self, batchSize: Int, start: Int, end: Int, scalingFactor: Float32 = Float32(1.0)) raises -> DTypePointer[DType.float32]:
+    fn load_again(inout self, batch_size: Int, start: Int, end: Int, scalingFactor: Float32 = Float32(1.0)) raises -> DTypePointer[DType.float32]:
         var _start = start
         var _end = end
-        let _batchSize = batchSize
+        let _batch_size = batch_size
         if(_start < 0):
             _start = 0
         if(_end>self.cols):
             _end = self.cols
 
-        let batch = DTypePointer[DType.float32].alloc(_batchSize * (_end - _start))
-        if(_batchSize < self.rows and _batchSize * (self.counter) < self.rows):
-            for i in range(_batchSize):
-                let sampleIndex = self.indeces.load((self.counter-1) * _batchSize + i).to_int()
+        let batch = DTypePointer[DType.float32].alloc(_batch_size * (_end - _start))
+        if(_batch_size < self.rows and _batch_size * (self.counter) < self.rows):
+            for i in range(_batch_size):
+                let sampleIndex = self.indeces.load((self.counter-1) * _batch_size + i).to_int()
                 for j in range(_start,_end):
                     batch.store(i * (_end-_start) + j - _start, scalingFactor * self.data.load(sampleIndex * self.cols + j))
 
         return batch
 
-    fn oneHot(inout self, batchSize: Int, index: Int, ndims: Int)raises -> DTypePointer[DType.float32]:
-        let _batchSize = batchSize
-        let batch = DTypePointer[DType.float32].alloc(_batchSize * ndims)
+    fn oneHot(inout self, batch_size: Int, index: Int, ndims: Int)raises -> DTypePointer[DType.float32]:
+        let _batch_size = batch_size
+        let batch = DTypePointer[DType.float32].alloc(_batch_size * ndims)
 
-        for i in range(_batchSize):
-            let sampleIndex = self.indeces.load((self.counter-1) * _batchSize + i).to_int()
+        for i in range(_batch_size):
+            let sampleIndex = self.indeces.load((self.counter-1) * _batch_size + i).to_int()
             let entry = self.data.load(sampleIndex * self.cols + index).to_int()
             for j in range(ndims):
                 if(entry == j):
@@ -145,7 +129,7 @@ struct DataLoader:
         print("NumSamples:",self.rows)
         print("SampleSize:",self.cols)
         print("Example Sample:")
-        let exampleBatch = self.load(1,0,self.cols)
-        let exampleBatch2 = self.load(1,0,self.cols)
-        let exampleBatch3 = self.load(1,0,self.cols)
+        let examplebatch = self.load(1,0,self.cols)
+        let examplebatch2 = self.load(1,0,self.cols)
+        let examplebatch3 = self.load(1,0,self.cols)
         print("\n")

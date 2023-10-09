@@ -8,490 +8,458 @@ from random import rand, random_si64, seed, randint
 from math import sin, cos, log, sqrt, exp, min, max
 
 from ..graph.tensor import Tensor
-from ..operators.forward import mul, add, sum, conv2d, ReLU, maxPool2d, softmax, MSE, CE, reshape, transpose
-from ..operators.backward import mul_grad, add_grad, conv2d_grad, sum_grad, ReLU_grad, maxPool2d_grad, softmax_grad, MSE_grad, CE_grad, reshape_grad, transpose_grad
+from ..operators.forward import mul, add, sum, conv_2d, relu, max_pool_2d, softmax, mse, cE, reshape, transpose
+from ..operators.backward import mul_grad, add_grad, conv_2d_grad, sum_grad, relu_grad, max_pool_2d_grad, softmax_grad, mse_grad, cE_grad, reshape_grad, transpose_grad
 from ..helpers.shape import shape, Vec
 
 alias nelts = simdwidthof[DType.float32]()
 
 struct Module:
-    var Tensors: DynamicVector[Tensor]
+    var tensors: DynamicVector[Tensor]
     var counter: Int
-    var forwardTape: DynamicVector[Int]
-    var backwardTape: DynamicVector[Int]
+    var forward_tape: DynamicVector[Int]
+    var backward_tape: DynamicVector[Int]
 
     fn __init__(inout self):
-        self.Tensors = DynamicVector[Tensor](0)
+        self.tensors = DynamicVector[Tensor](0)
         self.counter = 0
-        self.forwardTape = DynamicVector[Int]()
-        self.backwardTape = DynamicVector[Int]()
+        self.forward_tape = DynamicVector[Int]()
+        self.backward_tape = DynamicVector[Int]()
 
     @always_inline
-    fn addForward(inout self, TensorId: Int):
-        self.forwardTape.push_back(TensorId)
-
-    @always_inline
-    fn addBackward(inout self, TensorId: Int):
-        self.backwardTape.push_back(TensorId)
-
-    @always_inline
-    fn addTensor(inout self, inout a: Tensor):
-        a.setId(self.counter)
-        a.setInTensors(True)
+    fn add_to_graph(inout self, inout a: Tensor):
+        a.set_id(self.counter)
+        a.in_tensors = True
         self.counter += 1
-        self.Tensors.push_back(a)
-
-    # @always_inline
-    # fn tensor(inout self, *s: Int) -> Tensor:
-    #     let v = VariadicList[Int](s)
-    #     let len = len(v)
-    #      shape = DynamicVector[Int](0)
-    #     for i in range(len):
-    #         shape.push_back(v[i])
-
-    #     var newTensor = Tensor(shape)
-
-    #     return newTensor
+        self.tensors.push_back(a)
 
     @always_inline
-    fn printTensor(self, index: Int):
-        self.Tensors[index].printData()
-
-    @always_inline
-    fn getTensor(inout self, index: Int) -> Tensor:
-        return self.Tensors[index]
-
-    @always_inline
-    fn getCounter(self) -> Int:
-        return self.counter
-
-    @always_inline
-    fn printForwardTape(self):
+    fn print_forward_tape(self):
         print_no_newline("[ ")
-        let len = len(self.forwardTape)
+        let len = len(self.forward_tape)
         for i in range(len):
-            print_no_newline(self.forwardTape[i])
+            print_no_newline(self.forward_tape[i])
             if (i < len-1):
                 print_no_newline(", ")
         print_no_newline(" ]\n")
     
     @always_inline
-    fn printBackwardTape(self):
+    fn print_backward_tape(self):
         print_no_newline("[ ")
-        let len = len(self.backwardTape)
+        let len = len(self.backward_tape)
         for i in range(len):
-            print_no_newline(self.backwardTape[i])
+            print_no_newline(self.backward_tape[i])
             if (i < len-1):
                 print_no_newline(", ")
         print_no_newline(" ]\n")
 
     @always_inline
-    fn mul(inout self, inout A: Tensor, inout B: Tensor) -> Tensor:
+    fn mul(inout self, inout a: Tensor, inout b: Tensor) -> Tensor:
 
         # # check dimensions
-        let A_num_dims = A.getNum_dims()
-        let B_num_dims = B.getNum_dims()
-        if(A.getShape(A_num_dims-1) != B.getShape(B_num_dims-2)):
-            print("Error (at mul): For Matrix Multiplication, Matrices need to in the following shape: C[mxn] = A[mxk] * B[kxn]")
+        let a_num_dims = a.num_dims
+        let b_num_dims = b.num_dims
+        if(a.shape[a_num_dims-1] != b.shape[b_num_dims-2]):
+            print("Error (at mul): For Matrix Multiplication, Matrices need to in the following shape: c[mxn] = a[mxk] * b[kxn]")
 
         # init result Tensor 
         var new_shape = DynamicVector[Int](0)
         
         # regular
-        if(A_num_dims == B_num_dims):
-            for i in range(B_num_dims-1):
-                new_shape.push_back(A.shape[i])
-            new_shape.push_back(B.shape[B_num_dims-1])
+        if(a_num_dims == b_num_dims):
+            for i in range(b_num_dims-1):
+                new_shape.push_back(a.shape[i])
+            new_shape.push_back(b.shape[b_num_dims-1])
 
-        # broadcast A
-        elif(B_num_dims > A_num_dims):
-            for i in range(B_num_dims-2):
-                new_shape.push_back(B.shape[i])
-            new_shape.push_back(A.shape[A_num_dims-2])
-            new_shape.push_back(B.shape[B_num_dims-1])
+        # broadcast a
+        elif(b_num_dims > a_num_dims):
+            for i in range(b_num_dims-2):
+                new_shape.push_back(b.shape[i])
+            new_shape.push_back(a.shape[a_num_dims-2])
+            new_shape.push_back(b.shape[b_num_dims-1])
 
-        # broadcast B 
-        elif(A_num_dims > B_num_dims):
-            for i in range(A_num_dims-1):
-                new_shape.push_back(A.shape[i])
-            new_shape.push_back(B.shape[B_num_dims-1])        
+        # broadcast b 
+        elif(a_num_dims > b_num_dims):
+            for i in range(a_num_dims-1):
+                new_shape.push_back(a.shape[i])
+            new_shape.push_back(b.shape[b_num_dims-1])        
 
-        var C = Tensor(new_shape)
+        var c = Tensor(new_shape)
 
-        C.setName('mul')
+        c.set_name('mul')
 
-        if(not A.getInTensors()):
-            C.addParent(self.counter)
-            self.addTensor(A)
+        if(not a.in_tensors):
+            c.add_parent(self.counter)
+            self.add_to_graph(a)
         else:
-            C.addParent(A.getId())
+            c.add_parent(a.id)
 
-        if(not B.getInTensors()):
-            C.addParent(self.counter)
-            self.addTensor(B)
+        if(not b.in_tensors):
+            c.add_parent(self.counter)
+            self.add_to_graph(b)
         else:
-            C.addParent(B.getId())
-        self.addTensor(C)
+            c.add_parent(b.id)
+        self.add_to_graph(c)
 
-        return C 
+        return c 
         
     @always_inline
-    fn add(inout self, inout A: Tensor, inout B: Tensor) -> Tensor:
+    fn add(inout self, inout a: Tensor, inout b: Tensor) -> Tensor:
 
-        let A_num_dims = A.getNum_dims()
-        let B_num_dims = B.getNum_dims()
-        # if(A.getShape(A_num_dims-2) != B.getShape(B_num_dims-2) or A.getShape(A_num_dims-1) != B.getShape(B_num_dims-1)):
-        #     print("Error (at add): For Matrix Addition, Matrices need to in the following shape: C[mxn] = A[mxn] + B[mxn]")
+        let a_num_dims = a.num_dims
+        let b_num_dims = b.num_dims
+        # if(a.shape[a_num_dims-2] != b.shape[b_num_dims-2] or a.shape[a_num_dims-1] != b.shape[b_num_dims-1]):
+        #     print("Error (at add): For Matrix addition, Matrices need to in the following shape: c[mxn] = a[mxn] + b[mxn]")
 
         # init result Tensor 
         var new_shape = DynamicVector[Int](0)
         
         # regular
-        if(A_num_dims == B_num_dims):
-            for i in range(B_num_dims):
-                new_shape.push_back(A.shape[i])
+        if(a_num_dims == b_num_dims):
+            for i in range(b_num_dims):
+                new_shape.push_back(a.shape[i])
 
-        # broadcast A
-        elif(B_num_dims > A_num_dims):
-            for i in range(B_num_dims):
-                new_shape.push_back(B.shape[i])
+        # broadcast a
+        elif(b_num_dims > a_num_dims):
+            for i in range(b_num_dims):
+                new_shape.push_back(b.shape[i])
 
-        # broadcast B 
-        elif(A_num_dims > B_num_dims):
-            for i in range(A_num_dims):
-                new_shape.push_back(A.shape[i])  
+        # broadcast b 
+        elif(a_num_dims > b_num_dims):
+            for i in range(a_num_dims):
+                new_shape.push_back(a.shape[i])  
 
-        var C = Tensor(new_shape)
+        var c = Tensor(new_shape)
 
-        C.setName('add')
+        c.set_name('add')
 
-        if(not A.getInTensors()):
-            C.addParent(self.counter)
-            self.addTensor(A)
+        if(not a.in_tensors):
+            c.add_parent(self.counter)
+            self.add_to_graph(a)
         else:
-            C.addParent(A.getId())
+            c.add_parent(a.id)
 
-        if(not B.getInTensors()):
-            C.addParent(self.counter)
-            self.addTensor(B)
+        if(not b.in_tensors):
+            c.add_parent(self.counter)
+            self.add_to_graph(b)
         else:
-            C.addParent(B.getId())
-        self.addTensor(C)
+            c.add_parent(b.id)
+        self.add_to_graph(c)
 
-        return C 
+        return c 
 
     @always_inline
-    fn conv2d(inout self, inout A: Tensor, inout B: Tensor, padding: Int, stride: Int) -> Tensor: # A: input, B: kernels
+    fn conv_2d(inout self, inout a: Tensor, inout b: Tensor, padding: Int, stride: Int) -> Tensor: # a: input, b: kernels
 
-        # assumption: A (batch of input images) is of shape (batch_size, channels, width, height)
-        #             B (set of kernels) is of shape (num_filters, channels, a, b)
+        # assumption: a (batch of input images) is of shape (batch_size, channels, width, height)
+        #             b (set of kernels) is of shape (num_filters, channels, a, b)
 
-        let A_num_dims = A.getNum_dims()
-        let B_num_dims = B.getNum_dims()
+        let a_num_dims = a.num_dims
+        let b_num_dims = b.num_dims
 
-        let batch_size = A.shape[0]
-        let in_channels = A.shape[1]
-        let width = A.shape[2]
-        let height = A.shape[3]
+        let batch_size = a.shape[0]
+        let in_channels = a.shape[1]
+        let width = a.shape[2]
+        let height = a.shape[3]
 
-        let out_channels = B.shape[0]
-        if(in_channels != B.shape[1]):
-            print("Error (at conv2d): number of channels must be equal in the input and the kernels")
-        let kernel_width = B.shape[2]
-        let kernel_height = B.shape[3]
+        let out_channels = b.shape[0]
+        if(in_channels != b.shape[1]):
+            print("Error (at conv_2d): number of channels must be equal in the input and the kernels")
+        let kernel_width = b.shape[2]
+        let kernel_height = b.shape[3]
 
         # init result Tensor 
         let new_shape = shape(batch_size,out_channels, (width - kernel_width + 2*padding) // stride + 1, (height - kernel_height + 2*padding) // stride + 1) 
-        var C = Tensor(new_shape)
+        var c = Tensor(new_shape)
 
-        C.otherParams.store(0, padding)
-        C.otherParams.store(1, stride)
+        c.other_params.store(0, padding)
+        c.other_params.store(1, stride)
 
-        C.setName('conv2d')
+        c.set_name('conv_2d')
 
-        if(not A.getInTensors()):
-            C.addParent(self.counter)
-            self.addTensor(A)
+        if(not a.in_tensors):
+            c.add_parent(self.counter)
+            self.add_to_graph(a)
         else:
-            C.addParent(A.getId())
+            c.add_parent(a.id)
 
-        if(not B.getInTensors()):
-            C.addParent(self.counter)
-            self.addTensor(B)
+        if(not b.in_tensors):
+            c.add_parent(self.counter)
+            self.add_to_graph(b)
         else:
-            C.addParent(B.getId())
-        self.addTensor(C)
+            c.add_parent(b.id)
+        self.add_to_graph(c)
 
-        return C 
+        return c 
 
     @always_inline
-    fn ReLU(inout self, inout A: Tensor) -> Tensor: 
+    fn relu(inout self, inout a: Tensor) -> Tensor: 
         var new_shape = DynamicVector[Int]()
-        for i in range(A.getNum_dims()):
-            new_shape.push_back(A.getShape(i))
+        for i in range(a.num_dims):
+            new_shape.push_back(a.shape[i])
 
-        var B = Tensor(new_shape)
+        var b = Tensor(new_shape)
 
-        B.setName('ReLU')
+        b.set_name('relu')
 
-        if(not A.getInTensors()):
-            B.addParent(self.counter)
-            self.addTensor(A)
+        if(not a.in_tensors):
+            b.add_parent(self.counter)
+            self.add_to_graph(a)
         else:
-            B.addParent(A.getId())
-        self.addTensor(B)
+            b.add_parent(a.id)
+        self.add_to_graph(b)
 
-        return B
+        return b
 
     @always_inline
-    fn maxPool2d(inout self, inout A: Tensor, kernel_width: Int, kernel_height: Int, stride: Int, padding: Int) -> Tensor: 
-        let new_shape = shape(A.shape[0],A.shape[1],(2*padding + A.shape[2] - (kernel_width - 1) - 1)//stride + 1, (2*padding + A.shape[3] - (kernel_height - 1) - 1)//stride + 1)
+    fn max_pool_2d(inout self, inout a: Tensor, kernel_width: Int, kernel_height: Int, stride: Int, padding: Int) -> Tensor: 
+        let new_shape = shape(a.shape[0],a.shape[1],(2*padding + a.shape[2] - (kernel_width - 1) - 1)//stride + 1, (2*padding + a.shape[3] - (kernel_height - 1) - 1)//stride + 1)
 
-        var B = Tensor(new_shape)
+        var b = Tensor(new_shape)
 
-        B.otherParams.store(0,padding)
-        B.otherParams.store(1,stride)
-        B.otherParams.store(2,kernel_width)
-        B.otherParams.store(3,kernel_height)
+        b.other_params.store(0,padding)
+        b.other_params.store(1,stride)
+        b.other_params.store(2,kernel_width)
+        b.other_params.store(3,kernel_height)
 
-        B.setName('maxPool2d')
+        b.set_name('max_pool_2d')
 
-        if(not A.getInTensors()):
-            B.addParent(self.counter)
-            self.addTensor(A)
+        if(not a.in_tensors):
+            b.add_parent(self.counter)
+            self.add_to_graph(a)
         else:
-            B.addParent(A.getId())
-        self.addTensor(B)
+            b.add_parent(a.id)
+        self.add_to_graph(b)
 
-        return B
+        return b
 
 
     @always_inline
-    fn sum(inout self, inout A: Tensor) -> Tensor: 
+    fn sum(inout self, inout a: Tensor) -> Tensor: 
 
-        var B = Tensor(shape(1,1))
+        var b = Tensor(shape(1,1))
 
-        B.setName('sum')
+        b.set_name('sum')
 
-        if(not A.getInTensors()):
-            B.addParent(self.counter)
-            self.addTensor(A)
+        if(not a.in_tensors):
+            b.add_parent(self.counter)
+            self.add_to_graph(a)
         else:
-            B.addParent(A.getId())
-        self.addTensor(B)
+            b.add_parent(a.id)
+        self.add_to_graph(b)
 
-        return B
+        return b
 
     @always_inline
-    fn softmax(inout self, inout A: Tensor) -> Tensor: 
+    fn softmax(inout self, inout a: Tensor) -> Tensor: 
 
         var new_shape = DynamicVector[Int]()
-        for i in range(A.getNum_dims()):
-            new_shape.push_back(A.getShape(i))
+        for i in range(a.num_dims):
+            new_shape.push_back(a.shape[i])
 
-        var B = Tensor(new_shape)
+        var b = Tensor(new_shape)
 
-        B.setName('softmax')
+        b.set_name('softmax')
 
-        if(not A.getInTensors()):
-            B.addParent(self.counter)
-            self.addTensor(A)
+        if(not a.in_tensors):
+            b.add_parent(self.counter)
+            self.add_to_graph(a)
         else:
-            B.addParent(A.getId())
-        self.addTensor(B)
+            b.add_parent(a.id)
+        self.add_to_graph(b)
 
-        return B
+        return b
 
     @always_inline
-    fn MSE(inout self, inout A: Tensor, inout B: Tensor) -> Tensor:
+    fn mse(inout self, inout a: Tensor, inout b: Tensor) -> Tensor:
 
         # check dimensions
-        if(A.getNum_dims() != B.getNum_dims()):
-            print("Error (at MSE): number of dimensions are not equal")
-        let num_dims = A.getNum_dims()
-        if(A.getShape(num_dims-2) != B.getShape(num_dims-2) or A.getShape(num_dims-1) != B.getShape(num_dims-1)):
-            print("Error (at MSE): For MSE computation, Matrices need to in the following shape: C[mxn] = (A[mxn] - B[mxn])^2")
+        if(a.num_dims != b.num_dims):
+            print("Error (at mse): number of dimensions are not equal")
+        let num_dims = a.num_dims
+        if(a.shape[num_dims-2] != b.shape[num_dims-2] or a.shape[num_dims-1] != b.shape[num_dims-1]):
+            print("Error (at mse): For mse computation, Matrices need to in the following shape: c[mxn] = (a[mxn] - b[mxn])^2")
 
         # init result Tensor 
         var new_shape = DynamicVector[Int]()
         for i in range(num_dims):
-            new_shape.push_back(A.getShape(i))
-        var C = Tensor(shape(1))
+            new_shape.push_back(a.shape[i])
+        var c = Tensor(shape(1))
 
-        C.setName('MSE')
+        c.set_name('mse')
 
-        if(not A.getInTensors()):
-            C.addParent(self.counter)
-            self.addTensor(A)
+        if(not a.in_tensors):
+            c.add_parent(self.counter)
+            self.add_to_graph(a)
         else:
-            C.addParent(A.getId())
+            c.add_parent(a.id)
 
-        if(not B.getInTensors()):
-            C.addParent(self.counter)
-            self.addTensor(B)
+        if(not b.in_tensors):
+            c.add_parent(self.counter)
+            self.add_to_graph(b)
         else:
-            C.addParent(B.getId())
-        self.addTensor(C)
+            c.add_parent(b.id)
+        self.add_to_graph(c)
 
-        return C 
+        return c 
 
     @always_inline
-    fn CE(inout self, inout A: Tensor, inout B: Tensor) -> Tensor:
+    fn cE(inout self, inout a: Tensor, inout b: Tensor) -> Tensor:
 
         # check dimensions
-        if(A.getNum_dims() != B.getNum_dims()):
-            print("Error (at CE): number of dimensions are not equal")
-        let num_dims = A.getNum_dims()
-        if(A.getShape(num_dims-2) != B.getShape(num_dims-2) or A.getShape(num_dims-1) != B.getShape(num_dims-1)):
-            print("Error (at CE): For CE computation, Matrices need to in the following shape: C[mxn] = op(A[mxn],B[mxn])")
+        if(a.num_dims != b.num_dims):
+            print("Error (at cE): number of dimensions are not equal")
+        let num_dims = a.num_dims
+        if(a.shape[num_dims-2] != b.shape[num_dims-2] or a.shape[num_dims-1] != b.shape[num_dims-1]):
+            print("Error (at cE): For cE computation, Matrices need to in the following shape: c[mxn] = op(a[mxn],b[mxn])")
 
         # init result Tensor 
         var new_shape = DynamicVector[Int]()
         for i in range(num_dims):
-            new_shape.push_back(A.getShape(i))
-        var C = Tensor(shape(1))
+            new_shape.push_back(a.shape[i])
+        var c = Tensor(shape(1))
 
-        C.setName('CE')
-        if(A.name == "softmax"):
-            A.otherParams.store(0,3001) # 3001 means that the child is CE node -> simplifies gradient computation
-        if(B.name == "softmax"):
-            B.otherParams.store(0,3001)
+        c.set_name('cE')
+        if(a.name == "softmax"):
+            a.other_params.store(0,3001) # 3001 means that the child is cE node -> simplifies grad computation
+        if(b.name == "softmax"):
+            b.other_params.store(0,3001)
 
-        if(not A.getInTensors()):
-            C.addParent(self.counter)
-            self.addTensor(A)
+        if(not a.in_tensors):
+            c.add_parent(self.counter)
+            self.add_to_graph(a)
         else:
-            C.addParent(A.getId())
+            c.add_parent(a.id)
 
-        if(not B.getInTensors()):
-            C.addParent(self.counter)
-            self.addTensor(B)
+        if(not b.in_tensors):
+            c.add_parent(self.counter)
+            self.add_to_graph(b)
         else:
-            C.addParent(B.getId())
-        self.addTensor(C)
+            c.add_parent(b.id)
+        self.add_to_graph(c)
 
-        return C 
+        return c 
 
     @always_inline
-    fn reshape(inout self, inout A: Tensor, newShape: DynamicVector[Int]) -> Tensor: # also braodcastv
+    fn reshape(inout self, inout a: Tensor, newShape: DynamicVector[Int]) -> Tensor: # also braodcastv
         let num_dims = len(newShape)
         var new_shape = DynamicVector[Int]()
         for i in range(num_dims):
             new_shape.push_back(newShape[i])
 
-        var B = Tensor(new_shape)
+        var b = Tensor(new_shape)
 
-        if(B.cap % A.cap != 0):
-            print("Error (at reshape): B.cap % A.cap == 0 and B.cap // A.cap >= 1 is not fulfilled")
+        if(b.cap % a.cap != 0):
+            print("Error (at reshape): b.cap % a.cap == 0 and b.cap // a.cap >= 1 is not fulfilled")
 
-        B.setName('reshape')
+        b.set_name('reshape')
 
-        if(not A.getInTensors()):
-            B.addParent(self.counter)
-            self.addTensor(A)
+        if(not a.in_tensors):
+            b.add_parent(self.counter)
+            self.add_to_graph(a)
         else:
-            B.addParent(A.getId())
-        self.addTensor(B)
+            b.add_parent(a.id)
+        self.add_to_graph(b)
 
-        return B
+        return b
 
     @always_inline
-    fn transpose(inout self, inout A: Tensor) -> Tensor: 
-        let num_dims = A.getNum_dims()
+    fn transpose(inout self, inout a: Tensor) -> Tensor: 
+        let num_dims = a.num_dims
         if(num_dims < 2):
-            print("Error (at transpose): A transposed Tensor need to heave at least two dimenions!")
+            print("Error (at transpose): a transposed Tensor need to heave at least two dimenions!")
 
         var new_shape = DynamicVector[Int]()
         for i in range(num_dims - 2):
-            new_shape.push_back(A.getShape(i))
-        new_shape.push_back(A.getShape(num_dims-1))
-        new_shape.push_back(A.getShape(num_dims-2))
+            new_shape.push_back(a.shape[i])
+        new_shape.push_back(a.shape[num_dims-1])
+        new_shape.push_back(a.shape[num_dims-2])
 
-        var B = Tensor(new_shape)
+        var b = Tensor(new_shape)
 
-        B.setName('transpose')
+        b.set_name('transpose')
 
-        if(not A.getInTensors()):
-            B.addParent(self.counter)
-            self.addTensor(A)
+        if(not a.in_tensors):
+            b.add_parent(self.counter)
+            self.add_to_graph(a)
         else:
-            B.addParent(A.getId())
-        self.addTensor(B)
+            b.add_parent(a.id)
+        self.add_to_graph(b)
 
-        return B
+        return b
 
 
-    fn topOrder(inout self, inout Tensor: Tensor):  
-        if not Tensor.getVisited():
-            for i in range(Tensor.getNum_parents()):
-                let nextTensorId = Tensor.getParent(i)
-                var nextTensor = self.Tensors[nextTensorId]
-                self.topOrder(nextTensor)
-            self.forwardTape.push_back(Tensor.getId())
-            Tensor.setVisited(True)
+    fn top_order(inout self, inout Tensor: Tensor):  
+        if not Tensor.visited:
+            for i in range(Tensor.num_parents):
+                let nextTensorId = Tensor.get_parent(i)
+                var nextTensor = self.tensors[nextTensorId]
+                self.top_order(nextTensor)
+            self.forward_tape.push_back(Tensor.id)
+            Tensor.visited = True
 
     @always_inline
     fn forward(inout self, inout computingTensor: Tensor):
         for i in range(self.counter):
-            self.Tensors[i].setVisited(False)
-            if(self.Tensors[i].getName() != 'none'):
-                self.Tensors[i].setDataAll(0)
-        self.forwardTape = DynamicVector[Int]()
-        self.topOrder(computingTensor)
+            self.tensors[i].set_visited(False)
+            if(self.tensors[i].name != 'none'):
+                self.tensors[i].fill(0)
+        self.forward_tape = DynamicVector[Int]()
+        self.top_order(computingTensor)
 
         for i in range(self.counter):
-            var curr = self.Tensors[i]
-            if(curr.getName() == 'mul'):
-                let par1 = self.Tensors[curr.getParent(0)]
-                let par2 = self.Tensors[curr.getParent(1)]
+            var curr = self.tensors[i]
+            if(curr.name == 'mul'):
+                let par1 = self.tensors[curr.get_parent(0)]
+                let par2 = self.tensors[curr.get_parent(1)]
                 mul(curr,par1,par2)
-            if(curr.getName() == 'add'):
-                let par1 = self.Tensors[curr.getParent(0)]
-                let par2 = self.Tensors[curr.getParent(1)]
+            if(curr.name == 'add'):
+                let par1 = self.tensors[curr.get_parent(0)]
+                let par2 = self.tensors[curr.get_parent(1)]
                 add(curr,par1,par2)
-            if(curr.getName() == 'conv2d'):
-                let par1 = self.Tensors[curr.getParent(0)]
-                let par2 = self.Tensors[curr.getParent(1)]
-                conv2d(curr,par1,par2)
-            if(curr.getName() == 'ReLU'):
-                let par1 = self.Tensors[curr.getParent(0)]
-                ReLU(curr,par1) 
-            if(curr.getName() == 'maxPool2d'):
-                let par1 = self.Tensors[curr.getParent(0)]
-                maxPool2d(curr,par1) 
-            if(curr.getName() == 'sum'):
-                let par1 = self.Tensors[curr.getParent(0)]
+            if(curr.name == 'conv_2d'):
+                let par1 = self.tensors[curr.get_parent(0)]
+                let par2 = self.tensors[curr.get_parent(1)]
+                conv_2d(curr,par1,par2)
+            if(curr.name == 'relu'):
+                let par1 = self.tensors[curr.get_parent(0)]
+                relu(curr,par1) 
+            if(curr.name == 'max_pool_2d'):
+                let par1 = self.tensors[curr.get_parent(0)]
+                max_pool_2d(curr,par1) 
+            if(curr.name == 'sum'):
+                let par1 = self.tensors[curr.get_parent(0)]
                 sum(curr,par1)
-            if(curr.getName() == 'softmax'):
-                let par1 = self.Tensors[curr.getParent(0)]
+            if(curr.name == 'softmax'):
+                let par1 = self.tensors[curr.get_parent(0)]
                 softmax(curr,par1)
-            if(curr.getName() == 'MSE'):
-                let par1 = self.Tensors[curr.getParent(0)]
-                let par2 = self.Tensors[curr.getParent(1)]
-                MSE(curr,par1,par2) 
-            if(curr.getName() == 'CE'):
-                let par1 = self.Tensors[curr.getParent(0)]
-                let par2 = self.Tensors[curr.getParent(1)]
-                CE(curr,par1,par2) 
-            if(curr.getName() == 'reshape'):
-                let par1 = self.Tensors[curr.getParent(0)]
+            if(curr.name == 'mse'):
+                let par1 = self.tensors[curr.get_parent(0)]
+                let par2 = self.tensors[curr.get_parent(1)]
+                mse(curr,par1,par2) 
+            if(curr.name == 'cE'):
+                let par1 = self.tensors[curr.get_parent(0)]
+                let par2 = self.tensors[curr.get_parent(1)]
+                cE(curr,par1,par2) 
+            if(curr.name == 'reshape'):
+                let par1 = self.tensors[curr.get_parent(0)]
                 reshape(curr,par1)
-            if(curr.getName() == 'transpose'):
-                let par1 = self.Tensors[curr.getParent(0)]
+            if(curr.name == 'transpose'):
+                let par1 = self.tensors[curr.get_parent(0)]
                 transpose(curr,par1)
 
-    fn backwardOrder(inout self, Tensor: Tensor):
-        self.backwardTape = DynamicVector[Int](0)
-        self.backwardTape.push_back(Tensor.getId())
+    fn backward_order(inout self, Tensor: Tensor):
+        self.backward_tape = DynamicVector[Int](0)
+        self.backward_tape.push_back(Tensor.id)
         var it = 0
-        while(it < len(self.backwardTape)):
-            let currId = self.backwardTape[it]
-            let curr = self.Tensors[currId]
-            for i in range(curr.getNum_parents()):
-                let parId = curr.getParent(i)
-                let par = self.Tensors[parId]
-                if(par.getRequiresGradient()):
-                    self.backwardTape.push_back(parId)
+        while(it < len(self.backward_tape)):
+            let currId = self.backward_tape[it]
+            let curr = self.tensors[currId]
+            for i in range(curr.num_parents):
+                let parId = curr.get_parent(i)
+                let par = self.tensors[parId]
+                if(par.requires_grad):
+                    self.backward_tape.push_back(parId)
             it += 1
 
     @always_inline
@@ -499,93 +467,93 @@ struct Module:
         if(lastTensor.cap != 1):
             print("Error: Gradient can be implicitly created only for scalar outputs")
             return
-        self.backwardOrder(lastTensor)
+        self.backward_order(lastTensor)
         for i in range(self.counter):
-            if(self.Tensors[i].requiresGradient):
-                self.Tensors[i].setGradientAll(0)
+            if(self.tensors[i].requires_grad):
+                self.tensors[i].fill_grad(0)
 
-        for i in range(len(self.backwardTape)):
-            let currId = self.backwardTape[i]
-            let curr = self.Tensors[currId]
-            if(curr.getName() == 'mul'):
-                var par1 = self.Tensors[curr.getParent(0)]
-                var par2 = self.Tensors[curr.getParent(1)]
+        for i in range(len(self.backward_tape)):
+            let currId = self.backward_tape[i]
+            let curr = self.tensors[currId]
+            if(curr.name == 'mul'):
+                var par1 = self.tensors[curr.get_parent(0)]
+                var par2 = self.tensors[curr.get_parent(1)]
                 mul_grad(curr,par1,par2)
-            if(curr.getName() == 'add'):
-                var par1 = self.Tensors[curr.getParent(0)]
-                var par2 = self.Tensors[curr.getParent(1)]
+            if(curr.name == 'add'):
+                var par1 = self.tensors[curr.get_parent(0)]
+                var par2 = self.tensors[curr.get_parent(1)]
                 add_grad(curr,par1,par2)
-            if(curr.getName() == 'conv2d'):
-                var par1 = self.Tensors[curr.getParent(0)]
-                var par2 = self.Tensors[curr.getParent(1)]
-                conv2d_grad(curr,par1,par2)
-            if(curr.getName() == 'ReLU'):
-                var par1 = self.Tensors[curr.getParent(0)]
-                ReLU_grad(curr,par1)
-            if(curr.getName() == 'maxPool2d'):
-                var par1 = self.Tensors[curr.getParent(0)]
-                maxPool2d_grad(curr,par1)
-            if(curr.getName() == 'sum'):
-                var par1 = self.Tensors[curr.getParent(0)]
+            if(curr.name == 'conv_2d'):
+                var par1 = self.tensors[curr.get_parent(0)]
+                var par2 = self.tensors[curr.get_parent(1)]
+                conv_2d_grad(curr,par1,par2)
+            if(curr.name == 'relu'):
+                var par1 = self.tensors[curr.get_parent(0)]
+                relu_grad(curr,par1)
+            if(curr.name == 'max_pool_2d'):
+                var par1 = self.tensors[curr.get_parent(0)]
+                max_pool_2d_grad(curr,par1)
+            if(curr.name == 'sum'):
+                var par1 = self.tensors[curr.get_parent(0)]
                 sum_grad(curr,par1)
-            if(curr.getName() == 'softmax'):
-                var par1 = self.Tensors[curr.getParent(0)]
+            if(curr.name == 'softmax'):
+                var par1 = self.tensors[curr.get_parent(0)]
                 softmax_grad(curr,par1)
-            if(curr.getName() == 'MSE'):
-                var par1 = self.Tensors[curr.getParent(0)]
-                var par2 = self.Tensors[curr.getParent(1)]
-                MSE_grad(curr,par1,par2)
-            if(curr.getName() == 'CE'):
-                var par1 = self.Tensors[curr.getParent(0)]
-                var par2 = self.Tensors[curr.getParent(1)]
-                CE_grad(curr,par1,par2)
-            if(curr.getName() == 'reshape'):
-                var par1 = self.Tensors[curr.getParent(0)]
+            if(curr.name == 'mse'):
+                var par1 = self.tensors[curr.get_parent(0)]
+                var par2 = self.tensors[curr.get_parent(1)]
+                mse_grad(curr,par1,par2)
+            if(curr.name == 'cE'):
+                var par1 = self.tensors[curr.get_parent(0)]
+                var par2 = self.tensors[curr.get_parent(1)]
+                cE_grad(curr,par1,par2)
+            if(curr.name == 'reshape'):
+                var par1 = self.tensors[curr.get_parent(0)]
                 reshape_grad(curr,par1)
-            if(curr.getName() == 'transpose'):
-                var par1 = self.Tensors[curr.getParent(0)]
+            if(curr.name == 'transpose'):
+                var par1 = self.tensors[curr.get_parent(0)]
                 transpose_grad(curr,par1)
 
 
     fn optimize(inout self, optType: String, lr: Float32 = 0.001, momentum: Float32 = 0.9, weight_decay: Float32 = 0.001, threshold: Float32 = Float32(100.0)):
         
         if(optType == "sgd"):
-            for i in range(len(self.backwardTape)):
-                let id = self.Tensors[self.backwardTape[i]].id
-                for index in range(self.Tensors[id].getCap()):
-                    self.Tensors[id].setData(index, (1 - lr * weight_decay) * self.Tensors[id].getData(index) - lr * min(threshold,max(-threshold,self.Tensors[id].getGradient(index))))
+            for i in range(len(self.backward_tape)):
+                let id = self.tensors[self.backward_tape[i]].id
+                for index in range(self.tensors[id].cap):
+                    self.tensors[id].set_data(index, (1 - lr * weight_decay) * self.tensors[id].data.load(index) - lr * min(threshold,max(-threshold,self.tensors[id].grad.load(index))))
                 @parameter
                 fn v_update_data_sgd[nelts: Int](index: Int):
-                    self.Tensors[id].data.simd_store[nelts](
-                        index, (1 - lr * weight_decay) * self.Tensors[id].data.simd_load[nelts](index) - lr * self.Tensors[id].gradient.simd_load[nelts](index)
+                    self.tensors[id].data.simd_store[nelts](
+                        index, (1 - lr * weight_decay) * self.tensors[id].data.simd_load[nelts](index) - lr * self.tensors[id].grad.simd_load[nelts](index)
                     )
-                vectorize[nelts, v_update_data_sgd](self.Tensors[id].cap)
+                vectorize[nelts, v_update_data_sgd](self.tensors[id].cap)
         
         if(optType == "sgd_momentum"):
-            for i in range(len(self.backwardTape)):
-                let id = self.Tensors[self.backwardTape[i]].id
+            for i in range(len(self.backward_tape)):
+                let id = self.tensors[self.backward_tape[i]].id
 
                 @parameter
                 fn v_set_velocity[nelts: Int](index: Int):
-                    self.Tensors[id].velocity.simd_store[nelts](
-                        index, momentum * self.Tensors[id].velocity.simd_load[nelts](index) + lr * self.Tensors[id].gradient.simd_load[nelts](index)
+                    self.tensors[id].velocity.simd_store[nelts](
+                        index, momentum * self.tensors[id].velocity.simd_load[nelts](index) + lr * self.tensors[id].grad.simd_load[nelts](index)
                     )
-                vectorize[nelts, v_set_velocity](self.Tensors[id].cap)
+                vectorize[nelts, v_set_velocity](self.tensors[id].cap)
 
                 @parameter
                 fn v_update_data_sgdPlus[nelts: Int](index: Int):
-                    self.Tensors[id].data.simd_store[nelts](
-                        index, (1 - lr * weight_decay) * self.Tensors[id].data.simd_load[nelts](index) - self.Tensors[id].velocity.simd_load[nelts](index)
+                    self.tensors[id].data.simd_store[nelts](
+                        index, (1 - lr * weight_decay) * self.tensors[id].data.simd_load[nelts](index) - self.tensors[id].velocity.simd_load[nelts](index)
                     )
-                vectorize[nelts, v_update_data_sgdPlus](self.Tensors[id].cap)
+                vectorize[nelts, v_update_data_sgdPlus](self.tensors[id].cap)
 
 
     @always_inline
-    fn printTensors(self): 
-        print("Printing all Tensors of the Computational Graph .....\n")
+    fn print_graph(self): 
+        print("Printing all tensors of the computational Graph .....\n")
         for i in range(self.counter):
-            let n = self.Tensors[i]
-            print("Tensor ID: ", n.getId(), ", Name: ", n.getName(), ", rquiresGrad: ", n.getRequiresGradient(), ", cap = ", n.getCap())
-            n.printData()
-            n.printGradient()
-        print("End of Printing all Tensors of the Computational Graph.")
+            let n = self.tensors[i]
+            print("Tensor ID: ", n.id, ", Name: ", n.name, ", rquiresGrad: ", n.requires_grad, ", cap = ", n.cap)
+            n.print_data()
+            n.print_grad()
+        print("End of Printing all tensors of the computational Graph.")
