@@ -6,11 +6,16 @@ from runtime.llcl import Runtime
 from algorithm import vectorize, parallelize
 from random import rand, random_si64, seed, randint
 from math import sin, cos, log, sqrt, exp
-from python import Python
+
 
 from ..graph.tensor import Tensor
 from ..helpers.shape import shape, Vec
-                          
+
+fn is_int(s: String) -> Bool:
+    if(s=='0' or s=='1' or s=='2' or s=='3' or s=='4' or s=='5' or s=='6' or s=='7' or s=='8' or s=='9'):
+        return True 
+    return False
+
 struct DataLoader:
     var indeces: DTypePointer[DType.int32]
     var data: DTypePointer[DType.float32]
@@ -21,23 +26,42 @@ struct DataLoader:
 
     fn __init__(inout self, file_path: String)raises:
         print("Loading Dataset...")
-        let np = Python.import_module("numpy")
-        let py = Python.import_module("builtins")
-
         self.file_path = file_path
-        let np_data = np.loadtxt(self.file_path)
-        let np_shape = np_data.shape # ndim = 2 every time
+
+        var vec = DynamicVector[Float32]()
+        var rows: Int = 1
+        var cols: Int = 0
+        with open(file_path,"r") as f:
+            let text: String = f.read()
+            var connected: String = ""
+            for s in range(len(text)):
+                let c: String = text[s]
+                if(is_int(c)):
+                    connected += c   
+                    
+                if(not is_int(c) or c == "\n" or c == " "):
+                    vec.push_back(Float32(atol(connected)))
+                    connected = ""
+                    if(rows == 1):
+                        cols += 1 
+                if(c == "\n" or c == "$"):
+                    rows += 1  
+
+        let size = len(vec)
+
+        self.data = DTypePointer[DType.float32].alloc(size)
+
+        for i in range(size):
+            self.data.store(i, vec[i])
+        vec.clear()
+
+        # print(rows)
+        # print(cols)
         
-        self.rows = np_shape[0].to_float64().to_int()
-        self.cols = np_shape[1].to_float64().to_int()
-        self.data = DTypePointer[DType.float32].alloc(self.rows * self.cols)
+        self.rows = rows 
+        self.cols = cols
         self.indeces = DTypePointer[DType.int32].alloc(self.rows)
         self.counter = 0
-
-        for i in range(self.rows):
-            for j in range(self.cols):
-                self.data.store( i * self.cols + j, np_data[i][j].to_float64().cast[DType.float32]())
-
         seed()
         randint[DType.int32](self.indeces,self.rows,0,self.rows-1)
     
