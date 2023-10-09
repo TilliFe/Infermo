@@ -109,7 +109,7 @@ struct DataLoader:
 
         return batch
 
-    fn oneHot(inout self, batch_size: Int, index: Int, ndims: Int)raises -> DTypePointer[DType.float32]:
+    fn one_hot(inout self, batch_size: Int, index: Int, ndims: Int)raises -> DTypePointer[DType.float32]:
         let _batch_size = batch_size
         let batch = DTypePointer[DType.float32].alloc(_batch_size * ndims)
 

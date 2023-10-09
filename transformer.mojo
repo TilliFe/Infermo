@@ -8,7 +8,7 @@ from math import sqrt
 # TOY DaTaSET: add 1 to each number in a sequence.
 fn data_generator(inout inputs: Tensor, inout true_vals: Tensor, batch_size: Int, seq_len: Int, d_vocab: Int):
 
-    # random sequence of integers in the range [0,d_vocab-1] - yet not oneHot encoded
+    # random sequence of integers in the range [0,d_vocab-1] - yet not one_hot encoded
     let input_raw = Pointer[Int].alloc(batch_size * seq_len * d_vocab)
     let true_vals_raw = Pointer[Int].alloc(batch_size * seq_len * d_vocab)
     for batch in range(batch_size):
@@ -24,7 +24,7 @@ fn data_generator(inout inputs: Tensor, inout true_vals: Tensor, batch_size: Int
     memset_zero(input_data,size)
     memset_zero(true_vals_data,size)
 
-    # create a oneHot encoding of indeces in the input_data - current task: bitshift to the right by one
+    # create a one_hot encoding of indeces in the input_data - current task: bitshift to the right by one
     for batch in range(batch_size):
         for seq in range(seq_len):
             let input_index = input_raw.load(batch * seq_len + seq)

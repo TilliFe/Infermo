@@ -88,8 +88,8 @@ struct Model:
         self.nn.forward(self.logits)
 
         # some additional ops, not necessary for the training, just for showing the accuracy
-        let oneHots = oneHot(self.logits)
-        self.avg_acc = accuracy(oneHots,self.true_vals)
+        let one_hots = one_hot(self.logits)
+        self.avg_acc = accuracy(one_hots,self.true_vals)
 
         return self.logits
 
@@ -124,8 +124,8 @@ fn main()raises:
             end=785,
             scalingFactor=Float32(1)/Float32(255)
         )
-        # load the labels for the images (oneHot encded from 0 to 9)
-        let labels = dl.oneHot(
+        # load the labels for the images (one_hot encded from 0 to 9)
+        let labels = dl.one_hot(
             batch_size=64,
             index=0, # regarding the columm of the labels in the dataset
             ndims=10
