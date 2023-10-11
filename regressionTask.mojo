@@ -13,16 +13,16 @@ struct Model:
     var loss: Tensor
 
     fn __init__(inout self):
-        self.input = Tensor(shape(512,1))
+        self.input = Tensor(shape(32,1))
         self.input.requires_grad = False
-        self.true_vals = Tensor(shape(512,1))
+        self.true_vals = Tensor(shape(32,1))
         self.true_vals.requires_grad = False
         self.nn = Module()
 
         # define Model architecture
-        var x = linear(self.nn,self.input, num_neurons=16, addbias=True, activation='relu')
-        for i in range(2):
-            x = linear(self.nn,x, num_neurons=32, addbias=True, activation='relu')
+        var x = linear(self.nn,self.input, num_neurons=4, add_bias=True, activation='none')
+        for i in range(8):
+            x = linear(self.nn,x, num_neurons=32, add_bias=True, activation='relu')
         self.logits = linear(self.nn,x,1,True,'none')
         self.loss = self.nn.mse(self.true_vals,self.logits)
 
@@ -39,10 +39,10 @@ struct Model:
 
     @always_inline
     fn step(inout self):
-        self.nn.optimize('sgd_momentum', lr = 0.1, momentum = 0.9, weight_decay=0.0001)
+        self.nn.optimize('sgd_momentum', lr = 0.001, momentum = 0.9, weight_decay=0.001)
 
 
-# Data Generator for a simple regression problem
+# Data Generator for a simple regression problem, the (nonlinear) function looks like: /\/\/\/ and the network shall predict the proper y-values for some random x in [0,1]
 struct DataGenerator:
     var size: Int
     var x: DTypePointer[DType.float32]
@@ -57,24 +57,24 @@ struct DataGenerator:
     fn random(self, it: Int):
         seed(it)
         rand(self.x, self.size)
-        let min = -1
+        let min = 0
         let max = 1
         for i in range(self.size):
             let x_rand = self.x.load(i) * (max - min) + min
             self.x.store(i, x_rand)
-            let res = 0.5 + 0.5*sin(5*x_rand)
+            let res = 0.5 + 0.5*sin(20*x_rand)
             self.y.store(i, res) 
 
 
 # train the Model
 fn main() raises:
 
-    let dataset = DataGenerator(512)
+    let dataset = DataGenerator(32)
     var model = Model()
-    let num_epochs = 1000
+    let num_epochs = 100000
 
     var loss_sum: Float32 = 0
-    let every = 50
+    let every = 1000
 
     for epoch in range(0,num_epochs):
         dataset.random(epoch)

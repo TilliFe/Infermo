@@ -8,8 +8,8 @@ from random import rand, random_si64, seed, randint
 from math import sin, cos, log, sqrt, exp, min, max
 
 from ..graph.tensor import Tensor
-from ..operators.forward import mul, add, sum, conv_2d, relu, max_pool_2d, softmax, mse, ce, reshape, transpose
-from ..operators.backward import mul_grad, add_grad, conv_2d_grad, sum_grad, relu_grad, max_pool_2d_grad, softmax_grad, mse_grad, ce_grad, reshape_grad, transpose_grad
+from ..operators.forward import mul, add, sum, conv_2d, relu, max_pool_2d, softmax, mse, ce, reshape, transpose, copy
+from ..operators.backward import mul_grad, add_grad, conv_2d_grad, sum_grad, relu_grad, max_pool_2d_grad, softmax_grad, mse_grad, ce_grad, reshape_grad, transpose_grad, copy_grad
 from ..helpers.shape import shape, Vec
 
 alias nelts = simdwidthof[DType.float32]()
@@ -388,6 +388,25 @@ struct Module:
 
         return b
 
+    @always_inline
+    fn copy(inout self, inout a: Tensor) -> Tensor: 
+
+        var new_shape = DynamicVector[Int]()
+        for i in range(a.num_dims):
+            new_shape.push_back(a.shape[i])
+
+        var b = Tensor(new_shape)
+
+        b.set_name('copy')
+
+        if(not a.in_tensors):
+            b.add_parent(self.counter)
+            self.add_to_graph(a)
+        else:
+            b.add_parent(a.id)
+        self.add_to_graph(b)
+
+        return b
 
     fn top_order(inout self, inout Tensor: Tensor):  
         if not Tensor.visited:
@@ -447,6 +466,9 @@ struct Module:
             if(curr.name == 'transpose'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 transpose(curr,par1)
+            if(curr.name == 'copy'):
+                let par1 = self.tensors[curr.get_parent(0)]
+                copy(curr,par1)
 
     fn backward_order(inout self, Tensor: Tensor):
         self.backward_tape = DynamicVector[Int](0)
@@ -513,6 +535,9 @@ struct Module:
             if(curr.name == 'transpose'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 transpose_grad(curr,par1)
+            if(curr.name == 'copy'):
+                var par1 = self.tensors[curr.get_parent(0)]
+                copy_grad(curr,par1)
 
 
     fn optimize(inout self, optType: String, lr: Float32 = 0.001, momentum: Float32 = 0.9, weight_decay: Float32 = 0.001, threshold: Float32 = Float32(100.0)):

@@ -238,3 +238,9 @@ fn transpose(inout b: Tensor, a: Tensor):
         for i in range(M):
             for j in range(N):
                 b.set_data(offset + j * M + i, a.data.load(offset + i * N + j))
+
+
+@always_inline
+fn copy(inout b: Tensor, a: Tensor): 
+    memcpy(b.data,a.data,a.cap)
+    

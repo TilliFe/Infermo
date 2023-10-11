@@ -36,13 +36,13 @@ fn conv_2d(inout nn: Module, inout x: Tensor, out_channels: Int, kernel_width: I
 
 
 @always_inline
-fn linear(inout nn: Module, inout x: Tensor, num_neurons: Int, addbias : Bool = True, activation: String = 'relu') -> Tensor:
+fn linear(inout nn: Module, inout x: Tensor, num_neurons: Int, add_bias : Bool = True, activation: String = 'relu') -> Tensor:
     let x_rows = x.shape[x.num_dims - 2]
     let x_cols = x.shape[x.num_dims - 1]
     var W = Tensor(shape(x_cols,num_neurons))
 
     W.randHe()
-    if(addbias):
+    if(add_bias):
         var ones = Tensor(shape(x_rows,1))
         var bias = Tensor(shape(1,num_neurons))
         ones.fill(1)
@@ -233,7 +233,7 @@ fn mlp(inout nn: Module, d_Model: Int, d_mlp: Int, batch_size: Int, seq_len: Int
 
 
 fn transformer_block(inout nn: Module, d_Model: Int, num_heads: Int, d_head: Int, n_ctx: Int, d_mlp: Int, batch_size: Int, seq_len: Int, use_attn: Bool, use_mlp: Bool, init_std: Float32, inout x: Tensor) -> Tensor:
-    var res_stream = x
+    var res_stream = nn.copy(x)
     if(use_attn):
         x = attention(
             nn=nn,

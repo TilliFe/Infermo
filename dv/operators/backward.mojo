@@ -333,3 +333,7 @@ fn transpose_grad(b: Tensor, inout a: Tensor):
         for i in range(M):
             for j in range(N):
                 a.set_grad(offset + j * M + i,  a.grad.load(offset + j * M + i) + b.grad.load(offset + i * N + j))
+
+@always_inline
+fn copy_grad(b: Tensor, inout a: Tensor): 
+    memcpy(a.grad,b.grad,a.cap)

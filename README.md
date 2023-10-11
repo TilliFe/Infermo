@@ -70,12 +70,12 @@ struct Model:
         self.avg_acc = 0
 
         # define Model architecture
-        var x = linear(self.nn,self.input, num_neurons=64, addBias=True, activation='relu')
+        var x = linear(self.nn,self.input, num_neurons=64, add_bias=True, activation='relu')
         for i in range(2):
-            x = linear(self.nn,x, num_neurons=64, addBias=True, activation='relu')
+            x = linear(self.nn,x, num_neurons=64, add_bias=True, activation='relu')
         x = linear(self.nn,x,10,True,'none')
         self.logits = self.nn.softmax(x)
-        self.loss = self.nn.CE(self.true_vals,self.logits)
+        self.loss = self.nn.ce(self.true_vals,self.logits)
 
     @always_inline
     fn forward(inout self, _input: DTypePointer[DType.float32], _true_vals: DTypePointer[DType.float32]) -> Tensor:
@@ -179,13 +179,11 @@ fn main():
 
 - More basic Operators/Loss-functions/Activations
 - more speedups via Vectorization and Paralleization
-- build a simple Transformer with Infermo
 
 ## Usage
 
 Make sure you have installed and [configured mojo on your environment](https://docs.modular.com/mojo/manual/get-started/index.html)
 
-If you have problems with the Python integration (i.e. using numpy to read txt file), follow these steps: https://gist.github.com/trevorhobenshield/6bca58f947ad6115a113a97072df1a73
 
 Clone the repository
 

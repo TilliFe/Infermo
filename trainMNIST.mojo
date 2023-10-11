@@ -20,9 +20,9 @@ struct Model:
         self.avg_acc = 0
 
         # define Model architecture
-        var x = linear(self.nn,self.input, num_neurons=64, addbias=True, activation='relu')
+        var x = linear(self.nn,self.input, num_neurons=64, add_bias=True, activation='relu')
         for i in range(2):
-            x = linear(self.nn,x, num_neurons=64, addbias=True, activation='relu')
+            x = linear(self.nn,x, num_neurons=64, add_bias=True, activation='relu')
         x = linear(self.nn,x,10,True,'none')
         self.logits = self.nn.softmax(x)
         self.loss = self.nn.ce(self.true_vals,self.logits)
