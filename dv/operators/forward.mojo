@@ -88,7 +88,8 @@ fn conv_2d(inout c: Tensor, a: Tensor, b: Tensor):
         return n*(num_channels*height*width) + c*(height*width) + h*width + w
 
     # Loop over each image in the batch
-    for i in range(a.shape[0]):
+    @parameter
+    fn batch_loop(i: Int):
         for j in range(b.shape[0]):
             for x in range(c.shape[2]):
                 for y in range(c.shape[3]):
@@ -96,16 +97,29 @@ fn conv_2d(inout c: Tensor, a: Tensor, b: Tensor):
                     # apply the convolution operation - vectorize?
                     for k in range(a.shape[1]):
                         for dx in range(b.shape[2]):
-                            for dy in range(b.shape[3]):                        
+                            
+                            @parameter
+                            fn inner_loop[_nelts: Int](dy: Int):                        
                                 let ix = x * stride - padding + dx
                                 let iy = y * stride - padding + dy
-                                if ix < 0 or iy < 0 or ix >= a.shape[2] or iy >= a.shape[3]:
-                                    continue
-                                let a_index = index(i, k, ix, iy, a.shape[1], a.shape[2], a.shape[3])
-                                let b_index = index(j, k, dx, dy, a.shape[1], b.shape[2], b.shape[3])
-                                patch_sum += a.data.load(a_index) * b.data.load(b_index)
+                                if not (
+                                    ix < 0
+                                    or iy < 0
+                                    or ix >= a.shape[2]
+                                    or iy >= a.shape[3]
+                                ):
+                                    let a_index = index(i, k, ix, iy, a.shape[1], a.shape[2], a.shape[3])
+                                    let b_index = index(j, k, dx, dy, a.shape[1], b.shape[2], b.shape[3])
+                                    patch_sum += (
+                                        a.data.simd_load[_nelts](a_index)
+                                        * b.data.simd_load[_nelts](b_index)
+                                    ).reduce_add()
+
+                            vectorize[nelts, inner_loop](b.shape[3])
                     let c_index = index(i, j, x, y, b.shape[0], c.shape[2], c.shape[3])
                     c.data.store(c_index, patch_sum)
+
+    parallelize[batch_loop](a.shape[0], a.shape[0])
 
 @always_inline
 fn max_pool_2d(inout b: Tensor, a: Tensor):

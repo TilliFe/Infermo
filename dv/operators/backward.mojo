@@ -173,40 +173,80 @@ fn conv_2d_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
                     var patch_sum: Float32 = 0.0
                     for b in range(a.shape[0]):
                         for dx in range(c.shape[2]):
-                            for dy in range(c.shape[3]):                        
+                            
+                            @parameter
+                            fn inner_loop[_nelts: Int](dy: Int):                        
                                 # calculate input indices with consideration for padding and stride
                                 let ix = x * stride - padding + dx
                                 let iy = y * stride - padding + dy
                                 # Skip if index is out of bounds (this is 'zero' padding)
-                                if ix < 0 or iy < 0 or ix >= a.shape[2] or iy >= a.shape[3]:
-                                    continue
-                                let a_index = index(b, i, ix, iy, a.shape[1], a.shape[2], a.shape[3])
-                                let c_grad_index = index(b, j, dx, dy, c.shape[1], c.shape[2], c.shape[3])
-                                # add to patch sum
-                                patch_sum += a.data.load(a_index) * c.grad.load(c_grad_index)
+                                if not (
+                                    ix < 0
+                                    or iy < 0
+                                    or ix >= a.shape[2]
+                                    or iy >= a.shape[3]
+                                ):
+                                    let a_index = index(b, i, ix, iy, a.shape[1], a.shape[2], a.shape[3])
+                                    let c_grad_index = index(b, j, dx, dy, c.shape[1], c.shape[2], c.shape[3])
+                                    # add to patch sum
+                                    patch_sum += (
+                                        a.data.simd_load[_nelts](a_index)
+                                        * c.grad.simd_load[_nelts](c_grad_index)
+                                    ).reduce_add()
+
+                            vectorize[nelts, inner_loop](c.shape[3])
                     let b_grad_index = index(i, j, x, y, b.shape[0], b.shape[2], b.shape[3])
                     b.grad.store(b_grad_index, patch_sum)
 
-    # ##### compute the gradietn of the Input (left tensor) ############################################
-    for p in range(a.shape[0]): # batch_size
+    # ##### compute the gradient of the Input (left tensor) ############################################
+    @parameter
+    fn batch_loop(p: Int):  # batch_size
         for j in range(a.shape[1]): # in_channels
             for i in range(b.shape[0]): # out_channels
                 for x in range(a.shape[2]):
                     for y in range(a.shape[3]):
                         var patch_sum : Float32 = 0.0
                         for dx in range(b.shape[2]):
-                            for dy in range(b.shape[3]):
+
+                            @parameter
+                            fn dy_loop[_nelts: Int](dy: Int):
                                 let ix = x * stride - dx + padding
                                 let iy = y * stride - dy + padding
                                 # Skip if index is out of bounds (this is 'zero' padding)
-                                if ix < 0 or iy < 0 or ix >= c.shape[2] or iy >= c.shape[3]:
-                                    continue
-                                let c_grad_index = index(p,i,ix,iy,c.shape[1],c.shape[2],c.shape[3])
-                                let b_index = index(i,j,b.shape[2]-dx-1,b.shape[3]-dy-1,b.shape[1],b.shape[2],b.shape[3])
-                                patch_sum += c.grad.load(c_grad_index) * b.data.load(b_index)
+                                if not (
+                                    ix < 0
+                                    or iy < 0
+                                    or ix >= c.shape[2]
+                                    or iy >= c.shape[3]
+                                ):
+                                    let c_grad_index = index(
+                                        p,
+                                        i,
+                                        ix,
+                                        iy,
+                                        c.shape[1],
+                                        c.shape[2],
+                                        c.shape[3],
+                                    )
+                                    let b_index = index(
+                                        i,
+                                        j,
+                                        b.shape[2] - dx - 1,
+                                        b.shape[3] - dy - 1,
+                                        b.shape[1],
+                                        b.shape[2],
+                                        b.shape[3],
+                                    )
+                                    patch_sum += (
+                                        c.grad.simd_load[_nelts](c_grad_index)
+                                        * c.data.simd_load[_nelts](b_index)
+                                    ).reduce_add()
+                            
+                            vectorize[nelts, dy_loop](b.shape[3])
                         let a_grad_index = index(p,j,x,y,a.shape[1],a.shape[2],a.shape[3])
                         a.grad.store( a_grad_index, a.grad.load(a_grad_index) + patch_sum)
 
+    parallelize[batch_loop](a.shape[0], a.shape[0])
 
 @always_inline
 fn max_pool_2d_grad(b: Tensor, inout a: Tensor):
