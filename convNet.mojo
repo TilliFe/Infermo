@@ -61,7 +61,7 @@ fn main() raises:
     var dl = DataLoader('./dv/datasets/mnist.txt')
     var model = Model()
 
-    let num_epochs = 1000
+    let num_epochs = 100
     var loss_sum: Float32 = 0
     var avg_acc: Float32 = 0
     let every = 50
@@ -99,3 +99,6 @@ fn main() raises:
 
         # take an optimization step
         model.step()
+
+    model.nn.print_forward_durations()
+    model.nn.print_backward_durations()

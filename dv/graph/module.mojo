@@ -3,6 +3,7 @@ from memory.unsafe import Pointer
 from memory import memset_zero, memcpy
 from random import rand
 from runtime.llcl import Runtime
+from time import now
 from algorithm import vectorize, parallelize
 from random import rand, random_si64, seed, randint
 from math import sin, cos, log, sqrt, exp, min, max
@@ -19,12 +20,21 @@ struct Module:
     var counter: Int
     var forward_tape: DynamicVector[Int]
     var backward_tape: DynamicVector[Int]
+    var num_passes: Int
+    var forward_durations: DynamicVector[Int]
+    var backward_durations: DynamicVector[Int]
 
     fn __init__(inout self):
         self.tensors = DynamicVector[Tensor](0)
         self.counter = 0
         self.forward_tape = DynamicVector[Int]()
         self.backward_tape = DynamicVector[Int]()
+        self.num_passes = 0
+        self.forward_durations = DynamicVector[Int](12) # 0: mul, 1: add, 2: conv_2d,, 3: relu, 4: max_pool_2d, 5: sum, 6: softmax, 7: mse, 8: ce, 9: reshape, 10: transpose, 11: copy
+        self.backward_durations = DynamicVector[Int](12) # 0: mul, 1: add, 2: conv_2d,, 3: relu, 4: max_pool_2d, 5: sum, 6: softmax, 7: mse, 8: ce, 9: reshape, 10: transpose, 11: copy
+        for i in range(12):
+            self.forward_durations[i] = 0
+            self.backward_durations[i] = 0
 
     @always_inline
     fn add_to_graph(inout self, inout a: Tensor):
@@ -425,50 +435,75 @@ struct Module:
                 self.tensors[i].fill(0)
         self.forward_tape = DynamicVector[Int]()
         self.top_order(computingTensor)
+        self.num_passes += 1
 
         for i in range(self.counter):
             var curr = self.tensors[i]
             if(curr.name == 'mul'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 let par2 = self.tensors[curr.get_parent(1)]
+                let start = now()
                 mul(curr,par1,par2)
+                self.forward_durations[0] += (now() - start)
             if(curr.name == 'add'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 let par2 = self.tensors[curr.get_parent(1)]
+                let start = now()
                 add(curr,par1,par2)
+                self.forward_durations[1] += (now() - start)
             if(curr.name == 'conv_2d'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 let par2 = self.tensors[curr.get_parent(1)]
+                let start = now()
                 conv_2d(curr,par1,par2)
+                self.forward_durations[2] += (now() - start)
             if(curr.name == 'relu'):
                 let par1 = self.tensors[curr.get_parent(0)]
+                let start = now()
                 relu(curr,par1) 
+                self.forward_durations[3] += (now() - start)
             if(curr.name == 'max_pool_2d'):
                 let par1 = self.tensors[curr.get_parent(0)]
+                let start = now()
                 max_pool_2d(curr,par1) 
+                self.forward_durations[4] += (now() - start)
             if(curr.name == 'sum'):
                 let par1 = self.tensors[curr.get_parent(0)]
+                let start = now()
                 sum(curr,par1)
+                self.forward_durations[5] += (now() - start)
             if(curr.name == 'softmax'):
                 let par1 = self.tensors[curr.get_parent(0)]
+                let start = now()
                 softmax(curr,par1)
+                self.forward_durations[6] += (now() - start)
             if(curr.name == 'mse'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 let par2 = self.tensors[curr.get_parent(1)]
+                let start = now()
                 mse(curr,par1,par2) 
+                self.forward_durations[7] += (now() - start)
             if(curr.name == 'ce'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 let par2 = self.tensors[curr.get_parent(1)]
+                let start = now()
                 ce(curr,par1,par2) 
+                self.forward_durations[8] += (now() - start)
             if(curr.name == 'reshape'):
                 let par1 = self.tensors[curr.get_parent(0)]
+                let start = now()
                 reshape(curr,par1)
+                self.forward_durations[9] += (now() - start)
             if(curr.name == 'transpose'):
                 let par1 = self.tensors[curr.get_parent(0)]
+                let start = now()
                 transpose(curr,par1)
+                self.forward_durations[10] += (now() - start)
             if(curr.name == 'copy'):
                 let par1 = self.tensors[curr.get_parent(0)]
+                let start = now()
                 copy(curr,par1)
+                self.forward_durations[11] += (now() - start)
 
     fn backward_order(inout self, Tensor: Tensor):
         self.backward_tape = DynamicVector[Int](0)
@@ -500,44 +535,68 @@ struct Module:
             if(curr.name == 'mul'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 var par2 = self.tensors[curr.get_parent(1)]
+                let start = now()
                 mul_grad(curr,par1,par2)
+                self.backward_durations[0] += (now() - start)
             if(curr.name == 'add'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 var par2 = self.tensors[curr.get_parent(1)]
+                let start = now()
                 add_grad(curr,par1,par2)
+                self.backward_durations[1] += (now() - start)
             if(curr.name == 'conv_2d'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 var par2 = self.tensors[curr.get_parent(1)]
+                let start = now()
                 conv_2d_grad(curr,par1,par2)
+                self.backward_durations[2] += (now() - start)
             if(curr.name == 'relu'):
                 var par1 = self.tensors[curr.get_parent(0)]
+                let start = now()
                 relu_grad(curr,par1)
+                self.backward_durations[3] += (now() - start)
             if(curr.name == 'max_pool_2d'):
                 var par1 = self.tensors[curr.get_parent(0)]
+                let start = now()
                 max_pool_2d_grad(curr,par1)
+                self.backward_durations[4] += (now() - start)
             if(curr.name == 'sum'):
                 var par1 = self.tensors[curr.get_parent(0)]
+                let start = now()
                 sum_grad(curr,par1)
+                self.backward_durations[5] += (now() - start)
             if(curr.name == 'softmax'):
                 var par1 = self.tensors[curr.get_parent(0)]
+                let start = now()
                 softmax_grad(curr,par1)
+                self.backward_durations[6] += (now() - start)
             if(curr.name == 'mse'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 var par2 = self.tensors[curr.get_parent(1)]
+                let start = now()
                 mse_grad(curr,par1,par2)
+                self.backward_durations[7] += (now() - start)
             if(curr.name == 'ce'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 var par2 = self.tensors[curr.get_parent(1)]
+                let start = now()
                 ce_grad(curr,par1,par2)
+                self.backward_durations[8] += (now() - start)
             if(curr.name == 'reshape'):
                 var par1 = self.tensors[curr.get_parent(0)]
+                let start = now()
                 reshape_grad(curr,par1)
+                self.backward_durations[9] += (now() - start)
             if(curr.name == 'transpose'):
                 var par1 = self.tensors[curr.get_parent(0)]
+                let start = now()
                 transpose_grad(curr,par1)
+                self.backward_durations[10] += (now() - start)
             if(curr.name == 'copy'):
                 var par1 = self.tensors[curr.get_parent(0)]
+                let start = now()
                 copy_grad(curr,par1)
+                self.backward_durations[11] += (now() - start)
 
 
     fn optimize(inout self, optType: String, lr: Float32 = 0.001, momentum: Float32 = 0.9, weight_decay: Float32 = 0.001, threshold: Float32 = Float32(100.0)):
@@ -582,3 +641,73 @@ struct Module:
             n.print_data()
             n.print_grad()
         print("End of Printing all tensors of the computational Graph.")
+
+
+    @always_inline
+    fn print_forward_durations(self):
+        var summed_duration: Int = 0
+        for i in range(12):
+            if(self.forward_durations[i] > 0):
+                summed_duration += self.forward_durations[i]
+
+        print("\nAverage time spent in each operation per forward pass:")
+        if(self.forward_durations[0] > 0):
+            print("mul:           ", Float32(self.forward_durations[0]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.forward_durations[0])/summed_duration,"% )")
+        if(self.forward_durations[1] > 0):
+            print("add:           ", Float32(self.forward_durations[1]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.forward_durations[1])/summed_duration,"% )")
+        if(self.forward_durations[2] > 0):
+            print("conv_2d:       ", Float32(self.forward_durations[2]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.forward_durations[2])/summed_duration,"% )")
+        if(self.forward_durations[3] > 0):
+            print("relu:          ", Float32(self.forward_durations[3]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.forward_durations[3])/summed_duration,"% )")
+        if(self.forward_durations[4] > 0):
+            print("max_pool_2d:   ", Float32(self.forward_durations[4]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.forward_durations[4])/summed_duration,"% )")
+        if(self.forward_durations[5] > 0):
+            print("sum:           ", Float32(self.forward_durations[5]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.forward_durations[5])/summed_duration,"% )")
+        if(self.forward_durations[6] > 0):
+            print("softmax:       ", Float32(self.forward_durations[6]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.forward_durations[6])/summed_duration,"% )")
+        if(self.forward_durations[7] > 0):
+            print("mse:           ", Float32(self.forward_durations[7]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.forward_durations[7])/summed_duration,"% )")
+        if(self.forward_durations[8] > 0):
+            print("ce:            ", Float32(self.forward_durations[8]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.forward_durations[8])/summed_duration,"% )")
+        if(self.forward_durations[9] > 0):
+            print("reshape:       ", Float32(self.forward_durations[9]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.forward_durations[9])/summed_duration,"% )")
+        if(self.forward_durations[10] > 0):
+            print("transpose:     ", Float32(self.forward_durations[10]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.forward_durations[10])/summed_duration,"% )")
+        if(self.forward_durations[11] > 0):
+            print("copy:          ", Float32(self.forward_durations[11]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.forward_durations[11])/summed_duration,"% )")
+        
+
+    @always_inline
+    fn print_backward_durations(self):
+        var summed_duration: Int = 0
+        for i in range(12):
+            if(self.backward_durations[i] > 0):
+                summed_duration += self.backward_durations[i]
+
+        print("\nAverage time spent in each operation per backward pass:")
+        if(self.forward_durations[0] > 0):
+            print("mul:           ", Float32(self.backward_durations[0]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.backward_durations[0])/summed_duration,"% )")
+        if(self.backward_durations[1] > 0):
+            print("add:           ", Float32(self.backward_durations[1]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.backward_durations[1])/summed_duration,"% )")
+        if(self.backward_durations[2] > 0):
+            print("conv_2d:       ", Float32(self.backward_durations[2]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.backward_durations[2])/summed_duration,"% )")
+        if(self.backward_durations[3] > 0):
+            print("relu:          ", Float32(self.backward_durations[3]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.backward_durations[3])/summed_duration,"% )")
+        if(self.backward_durations[4] > 0):
+            print("max_pool_2d:   ", Float32(self.backward_durations[4]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.backward_durations[4])/summed_duration,"% )")
+        if(self.backward_durations[5] > 0):
+            print("sum:           ", Float32(self.backward_durations[5]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.backward_durations[5])/summed_duration,"% )")
+        if(self.backward_durations[6] > 0):
+            print("softmax:       ", Float32(self.backward_durations[6]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.backward_durations[6])/summed_duration,"% )")
+        if(self.backward_durations[7] > 0):
+            print("mse:           ", Float32(self.backward_durations[7]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.backward_durations[7])/summed_duration,"% )")
+        if(self.backward_durations[8] > 0):
+            print("ce:            ", Float32(self.backward_durations[8]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.backward_durations[8])/summed_duration,"% )")
+        if(self.backward_durations[9] > 0):
+            print("reshape:       ", Float32(self.backward_durations[9]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.backward_durations[9])/summed_duration,"% )")
+        if(self.backward_durations[10] > 0):
+            print("transpose:     ", Float32(self.backward_durations[10]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.backward_durations[10])/summed_duration,"% )")
+        if(self.backward_durations[11] > 0):
+            print("copy:          ", Float32(self.backward_durations[11]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.backward_durations[11])/summed_duration,"% )")
+        
+

@@ -88,3 +88,6 @@ fn main() raises:
             loss_sum = 0      
             # logits.print_data()
             # model.true_vals.print_data()
+
+    model.nn.print_forward_durations()
+    model.nn.print_backward_durations()

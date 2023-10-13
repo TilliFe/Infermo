@@ -118,3 +118,6 @@ fn main():
 
         # take a optimization step
         nn.optimize('sgd_momentum', lr = lr, momentum = momentum, weight_decay=wd, threshold=th)
+
+    nn.print_forward_durations()
+    nn.print_backward_durations()

@@ -59,7 +59,7 @@ fn main() raises:
     var dl = DataLoader('./dv/datasets/mnist.txt')
     var model = Model()
 
-    let num_epochs = 10000
+    let num_epochs = 1000
     var loss_sum: Float32 = 0
     var avg_acc: Float32 = 0
     let every = 100
@@ -90,3 +90,6 @@ fn main() raises:
             avg_acc = 0
             # logits.print_data()
             # model.true_vals.print_data()
+
+    model.nn.print_forward_durations()
+    model.nn.print_backward_durations()

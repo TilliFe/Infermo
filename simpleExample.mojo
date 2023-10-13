@@ -23,3 +23,6 @@ fn main():
     nn.backward(D)
     a.print_grad()
     b.print_grad()
+
+    nn.print_forward_durations()
+    nn.print_backward_durations()

@@ -8,6 +8,9 @@
 
 Infermo is currently a Proof-of-Concept. While it’s mainly functional, it’s still under optimization and currently operates on CPU only.
 
+> **New**: Print out average time spent in each operation in the forward or the backward pass. This gives insight into where optimization might be especially needed!
+
+
 ## Overview
 
 **High Level Operators**:
