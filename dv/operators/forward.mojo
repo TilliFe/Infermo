@@ -177,22 +177,39 @@ fn sum(inout b: Tensor, a: Tensor):
 
 @always_inline
 fn softmax(inout b: Tensor, a: Tensor):
-    # #by default take the softmax along the last dimension of the tensor
+    # by default take the softmax along the last dimension of the tensor
     let num_dims = a.num_dims
-    let N = a.shape[num_dims-1]
+    let N = a.shape[num_dims - 1]
 
-    for s in range(b.cap//N):
-        var max_el:Float32 = 0.0
-        for i in range(N):
-            if(b.data.load(s*N+i) > max_el):
-                max_el = b.data.load(s*N+i)
-        for i in range(N):
-            b.data.store(s*N+i,exp(a.data.load(s*N+i) - max_el))
+    for s in range(b.cap // N):
+        var max_el: Float32 = 0.0
+
+        @parameter
+        fn v_max[nelts: Int](i: Int):
+            let temp = b.data.simd_load[nelts](s * N + i).reduce_max()
+            max_el = max(max_el, temp)
+
+        vectorize[nelts, v_max](N)
+
+        # calculate the exponential of each element and do sum op
         var sum: Float32 = 0.0
-        for i in range(N):
-            sum += b.data.load(s*N+i)
-        for i in range(N):
-            b.data.store(s*N+i, b.data.load(s*N+i) / sum)
+
+        @parameter
+        fn v_exp[nelts: Int](i: Int):
+            let temp = exp(a.data.simd_load[nelts](s * N + i) - max_el)
+            b.data.simd_store[nelts](s * N + i, temp)
+            sum += temp.reduce_add()
+
+        vectorize[nelts, v_exp](N)
+
+        # divide each element by the sum
+        @parameter
+        fn v_div[nelts: Int](i: Int):
+            b.data.simd_store[nelts](
+                s * N + i, b.data.simd_load[nelts](s * N + i) / sum
+            )
+
+        vectorize[nelts, v_div](N)
 
     # this does not work yet
     # for s in range(b.cap // N):
@@ -211,6 +228,7 @@ fn softmax(inout b: Tensor, a: Tensor):
     #     fn v_div[nelts: Int](i: Int):
     #         b.data.simd_store[nelts](s*N + i, b.data.simd_load[nelts](s*N + i) / row_sum)
     #     vectorize[nelts, v_div](N)
+
         
 @always_inline
 fn mse(inout c: Tensor, a: Tensor, b: Tensor):
