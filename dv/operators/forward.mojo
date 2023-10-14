@@ -168,9 +168,12 @@ fn relu(inout b: Tensor, a: Tensor):
 @always_inline
 fn sum(inout b: Tensor, a: Tensor):
     var sum: Float32 = 0
-    for i in range(a.cap):
-        sum += a.data.load(i)
-    b.set_data(0,sum)
+
+    @parameter
+    fn v_sum[nelts: Int](i: Int):
+        sum += a.data.simd_load[nelts](i).reduce_add()
+
+    b.set_data(0, sum)
 
 @always_inline
 fn softmax(inout b: Tensor, a: Tensor):
