@@ -211,9 +211,14 @@ fn softmax(inout b: Tensor, a: Tensor):
         
 @always_inline
 fn mse(inout c: Tensor, a: Tensor, b: Tensor):
-    for index in range(a.cap):
-        let error = (a.data.load(index) - b.data.load(index)) * (a.data.load(index) - b.data.load(index))
-        c.set_data(0, c.data.load(0) + error)
+    @parameter
+    fn v_mse[nelts: Int](index: Int):
+        let error = (
+            a.data.simd_load[nelts](index) - b.data.simd_load[nelts](index)
+        ) * (a.data.simd_load[nelts](index) - b.data.simd_load[nelts](index))
+        c.set_data(0, c.data.load(0) + error.reduce_add())
+
+    vectorize[nelts, v_mse](a.cap)
     c.set_data(0, c.data.load(0) / Float32(a.cap))
 
 @always_inline
