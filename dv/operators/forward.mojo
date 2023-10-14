@@ -224,11 +224,17 @@ fn mse(inout c: Tensor, a: Tensor, b: Tensor):
 @always_inline
 fn ce(inout c: Tensor, a: Tensor, b: Tensor):
     let num_dims = a.num_dims
-    let N = a.shape[num_dims-1]
+    let N = a.shape[num_dims - 1]
     let epsilon = Float32(1e-8)
-    for index in range(a.cap):
-        let error = -a.data.load(index) * log(b.data.load(index) + epsilon)
-        c.set_data(0, c.data.load(0) + error)
+
+    @parameter
+    fn v_ce[nelts: Int](index: Int):
+        let error = -a.data.simd_load[nelts](index) * log(
+            b.data.simd_load[nelts](index) + epsilon
+        )
+        c.set_data(0, c.data.load(0) + error.reduce_add())
+
+    vectorize[nelts, v_ce](a.cap)
     c.set_data(0, c.data.load(0) / (Float32(a.cap) / Float32(N)))
 
 
