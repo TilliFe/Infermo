@@ -168,28 +168,48 @@ fn relu(inout b: Tensor, a: Tensor):
 @always_inline
 fn sum(inout b: Tensor, a: Tensor):
     var sum: Float32 = 0
-    for i in range(a.cap):
-        sum += a.data.load(i)
-    b.set_data(0,sum)
+
+    @parameter
+    fn v_sum[nelts: Int](i: Int):
+        sum += a.data.simd_load[nelts](i).reduce_add()
+
+    b.set_data(0, sum)
 
 @always_inline
 fn softmax(inout b: Tensor, a: Tensor):
-    # #by default take the softmax along the last dimension of the tensor
+    # by default take the softmax along the last dimension of the tensor
     let num_dims = a.num_dims
-    let N = a.shape[num_dims-1]
+    let N = a.shape[num_dims - 1]
 
-    for s in range(b.cap//N):
-        var max_el:Float32 = 0.0
-        for i in range(N):
-            if(b.data.load(s*N+i) > max_el):
-                max_el = b.data.load(s*N+i)
-        for i in range(N):
-            b.data.store(s*N+i,exp(a.data.load(s*N+i) - max_el))
+    for s in range(b.cap // N):
+        var max_el: Float32 = 0.0
+
+        @parameter
+        fn v_max[nelts: Int](i: Int):
+            let temp = b.data.simd_load[nelts](s * N + i).reduce_max()
+            max_el = max(max_el, temp)
+
+        vectorize[nelts, v_max](N)
+
+        # calculate the exponential of each element and do sum op
         var sum: Float32 = 0.0
-        for i in range(N):
-            sum += b.data.load(s*N+i)
-        for i in range(N):
-            b.data.store(s*N+i, b.data.load(s*N+i) / sum)
+
+        @parameter
+        fn v_exp[nelts: Int](i: Int):
+            let temp = exp(a.data.simd_load[nelts](s * N + i) - max_el)
+            b.data.simd_store[nelts](s * N + i, temp)
+            sum += temp.reduce_add()
+
+        vectorize[nelts, v_exp](N)
+
+        # divide each element by the sum
+        @parameter
+        fn v_div[nelts: Int](i: Int):
+            b.data.simd_store[nelts](
+                s * N + i, b.data.simd_load[nelts](s * N + i) / sum
+            )
+
+        vectorize[nelts, v_div](N)
 
     # this does not work yet
     # for s in range(b.cap // N):
@@ -208,22 +228,34 @@ fn softmax(inout b: Tensor, a: Tensor):
     #     fn v_div[nelts: Int](i: Int):
     #         b.data.simd_store[nelts](s*N + i, b.data.simd_load[nelts](s*N + i) / row_sum)
     #     vectorize[nelts, v_div](N)
+
         
 @always_inline
 fn mse(inout c: Tensor, a: Tensor, b: Tensor):
-    for index in range(a.cap):
-        let error = (a.data.load(index) - b.data.load(index)) * (a.data.load(index) - b.data.load(index))
-        c.set_data(0, c.data.load(0) + error)
+    @parameter
+    fn v_mse[nelts: Int](index: Int):
+        let error = (
+            a.data.simd_load[nelts](index) - b.data.simd_load[nelts](index)
+        ) * (a.data.simd_load[nelts](index) - b.data.simd_load[nelts](index))
+        c.set_data(0, c.data.load(0) + error.reduce_add())
+
+    vectorize[nelts, v_mse](a.cap)
     c.set_data(0, c.data.load(0) / Float32(a.cap))
 
 @always_inline
 fn ce(inout c: Tensor, a: Tensor, b: Tensor):
     let num_dims = a.num_dims
-    let N = a.shape[num_dims-1]
+    let N = a.shape[num_dims - 1]
     let epsilon = Float32(1e-8)
-    for index in range(a.cap):
-        let error = -a.data.load(index) * log(b.data.load(index) + epsilon)
-        c.set_data(0, c.data.load(0) + error)
+
+    @parameter
+    fn v_ce[nelts: Int](index: Int):
+        let error = -a.data.simd_load[nelts](index) * log(
+            b.data.simd_load[nelts](index) + epsilon
+        )
+        c.set_data(0, c.data.load(0) + error.reduce_add())
+
+    vectorize[nelts, v_ce](a.cap)
     c.set_data(0, c.data.load(0) / (Float32(a.cap) / Float32(N)))
 
 
@@ -241,17 +273,22 @@ fn reshape(inout b: Tensor, a: Tensor):
 
 @always_inline
 fn transpose(inout b: Tensor, a: Tensor):
-    
-    # we always tranpose along the last two dimensions of the tensor - vectorize? 
+    # we always tranpose along the last two dimensions of the tensor - vectorize?
     let num_dims = a.num_dims
-    let M = a.shape[num_dims-2]
-    let N = a.shape[num_dims-1]
+    let M = a.shape[num_dims - 2]
+    let N = a.shape[num_dims - 1]
 
-    for s in range(b.cap // (M*N)):
+    for s in range(b.cap // (M * N)):
         let offset = s * M * N
         for i in range(M):
-            for j in range(N):
-                b.set_data(offset + j * M + i, a.data.load(offset + i * N + j))
+
+            @parameter
+            fn v_transpose[nelts: Int](j: Int):
+                b.data.simd_store[nelts](
+                    offset + j * M + i, a.data.simd_load[nelts](offset + i * N + j)
+                )
+
+            vectorize[nelts, v_transpose](N)
 
 
 @always_inline

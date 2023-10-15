@@ -295,36 +295,62 @@ fn sum_grad(b: Tensor, inout a: Tensor):
     a.fill_grad(1)
 
 @always_inline
-fn softmax_grad(b: Tensor, inout a: Tensor): 
-    if(b.other_params.load(0) == 3001):
+fn softmax_grad(b: Tensor, inout a: Tensor):
+    if b.other_params.load(0) == 3001:
         a.set_grad(b.grad)
     else:
         let num_dims = b.num_dims
-        let M = b.shape[num_dims-2]
-        let N = b.shape[num_dims-1]
+        let M = b.shape[num_dims - 2]
+        let N = b.shape[num_dims - 1]
         for s in range(b.cap // N):
             let offset = s * N
-            for j in range(N):
+
+            @parameter
+            fn v_softmax_grad_outer[nelts: Int](j: Int):
                 var grad: Float32 = 0
-                for i in range(N):
-                    if(i == j):
-                        grad += b.grad.load(offset + i) * ( b.data.load(offset + j) * (Float32(1.0) - b.data.load(offset + j)) )
+                var grad2: Float32 = 0
+
+                @parameter
+                fn v_softmax_grad[nelts: Int](i: Int):
+                    if i == j:
+                        let temp = b.data.simd_load[nelts](offset + j)
+                        grad += (
+                            b.grad.simd_load[nelts](offset + i)
+                            * (temp * (Float32(1.0) - temp))
+                        ).reduce_add()
                     else:
-                        grad -= b.grad.load(offset + i)  * b.data.load(offset + i) * b.data.load(offset + j)
-                a.set_grad(offset + j,  a.grad.load(offset + j) + grad)
+                        grad += (
+                            b.grad.simd_load[nelts](offset + i)
+                            * b.data.simd_load[nelts](offset + i)
+                            * b.data.simd_load[nelts](offset + j)
+                            * -1
+                        ).reduce_add()  # changed to grad +=, because of the *-1
+
+                vectorize[nelts, v_softmax_grad](N)
+
+                a.grad.simd_store[nelts](
+                    offset + j, a.grad.simd_load[nelts](offset + j) + grad
+                )
+
+            vectorize[nelts, v_softmax_grad_outer](N)
 
 @always_inline
-fn mse_grad(c: Tensor, inout a: Tensor, inout b: Tensor): # a: TrueVals, b: Logits
+fn mse_grad(c: Tensor, inout a: Tensor, inout b: Tensor):  # a: TrueVals, b: Logits
     let num_dims = a.num_dims
-    let M = a.shape[num_dims-2]
-    let N = a.shape[num_dims-1]
+    let M = a.shape[num_dims - 2]
+    let N = a.shape[num_dims - 1]
 
-    for index in range(a.cap):
-        let grad = Float32(2) * (b.data.load(index) - a.data.load(index)) / Float32(a.cap)
-        if(a.requires_grad):
-            a.grad.store(index, a.grad.load(index) + grad) 
-        if(b.requires_grad):
-            b.grad.store(index, b.grad.load(index) + grad) 
+    @parameter
+    fn v_mse_grad[nelts: Int](index: Int):
+        let grad = Float32(2) * (
+            b.data.simd_load[nelts](index) - a.data.simd_load[nelts](index)
+        ) / Float32(a.cap)
+        if a.requires_grad:
+            a.grad.simd_store[nelts](index, a.grad.simd_load[nelts](index) + grad)
+        if b.requires_grad:
+            b.grad.simd_store[nelts](index, b.grad.simd_load[nelts](index) + grad)
+
+    vectorize[nelts, v_mse_grad](a.cap)
 
 @always_inline
 fn ce_grad(c: Tensor, inout a: Tensor, inout b: Tensor): # a: TrueVals, b: Logits
@@ -365,14 +391,22 @@ fn reshape_grad(b: Tensor, inout a: Tensor):
 @always_inline
 fn transpose_grad(b: Tensor, inout a: Tensor):
     let num_dims = b.num_dims
-    let M = b.shape[num_dims-2]
-    let N = b.shape[num_dims-1]
+    let M = b.shape[num_dims - 2]
+    let N = b.shape[num_dims - 1]
 
-    for s in range(b.cap // (M*N)):
+    for s in range(b.cap // (M * N)):
         let offset = s * M * N
         for i in range(M):
-            for j in range(N):
-                a.set_grad(offset + j * M + i,  a.grad.load(offset + j * M + i) + b.grad.load(offset + i * N + j))
+
+            @parameter
+            fn v_transpose[nelts: Int](j: Int):
+                a.grad.simd_store[nelts](
+                    offset + j * M + i,
+                    a.grad.simd_load[nelts](offset + j * M + i)
+                    + b.grad.simd_load[nelts](offset + i * N + j),
+                )
+
+            vectorize[nelts, v_transpose](N)
 
 @always_inline
 fn copy_grad(b: Tensor, inout a: Tensor): 
