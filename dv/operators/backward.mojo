@@ -295,23 +295,44 @@ fn sum_grad(b: Tensor, inout a: Tensor):
     a.fill_grad(1)
 
 @always_inline
-fn softmax_grad(b: Tensor, inout a: Tensor): 
-    if(b.other_params.load(0) == 3001):
+fn softmax_grad(b: Tensor, inout a: Tensor):
+    if b.other_params.load(0) == 3001:
         a.set_grad(b.grad)
     else:
         let num_dims = b.num_dims
-        let M = b.shape[num_dims-2]
-        let N = b.shape[num_dims-1]
+        let M = b.shape[num_dims - 2]
+        let N = b.shape[num_dims - 1]
         for s in range(b.cap // N):
             let offset = s * N
-            for j in range(N):
+
+            @parameter
+            fn v_softmax_grad_outer[nelts: Int](j: Int):
                 var grad: Float32 = 0
-                for i in range(N):
-                    if(i == j):
-                        grad += b.grad.load(offset + i) * ( b.data.load(offset + j) * (Float32(1.0) - b.data.load(offset + j)) )
+                var grad2: Float32 = 0
+
+                @parameter
+                fn v_softmax_grad[nelts: Int](i: Int):
+                    if i == j:
+                        let temp = b.data.simd_load[nelts](offset + j)
+                        grad += (
+                            b.grad.simd_load[nelts](offset + i)
+                            * (temp * (Float32(1.0) - temp))
+                        ).reduce_add()
                     else:
-                        grad -= b.grad.load(offset + i)  * b.data.load(offset + i) * b.data.load(offset + j)
-                a.set_grad(offset + j,  a.grad.load(offset + j) + grad)
+                        grad += (
+                            b.grad.simd_load[nelts](offset + i)
+                            * b.data.simd_load[nelts](offset + i)
+                            * b.data.simd_load[nelts](offset + j)
+                            * -1
+                        ).reduce_add()  # changed to grad +=, because of the *-1
+
+                vectorize[nelts, v_softmax_grad](N)
+
+                a.grad.simd_store[nelts](
+                    offset + j, a.grad.simd_load[nelts](offset + j) + grad
+                )
+
+            vectorize[nelts, v_softmax_grad_outer](N)
 
 @always_inline
 fn mse_grad(c: Tensor, inout a: Tensor, inout b: Tensor): # a: TrueVals, b: Logits
