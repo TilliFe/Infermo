@@ -365,14 +365,22 @@ fn reshape_grad(b: Tensor, inout a: Tensor):
 @always_inline
 fn transpose_grad(b: Tensor, inout a: Tensor):
     let num_dims = b.num_dims
-    let M = b.shape[num_dims-2]
-    let N = b.shape[num_dims-1]
+    let M = b.shape[num_dims - 2]
+    let N = b.shape[num_dims - 1]
 
-    for s in range(b.cap // (M*N)):
+    for s in range(b.cap // (M * N)):
         let offset = s * M * N
         for i in range(M):
-            for j in range(N):
-                a.set_grad(offset + j * M + i,  a.grad.load(offset + j * M + i) + b.grad.load(offset + i * N + j))
+
+            @parameter
+            fn v_transpose[nelts: Int](j: Int):
+                a.grad.simd_store[nelts](
+                    offset + j * M + i,
+                    a.grad.simd_load[nelts](offset + j * M + i)
+                    + b.grad.simd_load[nelts](offset + i * N + j),
+                )
+
+            vectorize[nelts, v_transpose](N)
 
 @always_inline
 fn copy_grad(b: Tensor, inout a: Tensor): 

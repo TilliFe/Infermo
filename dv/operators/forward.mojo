@@ -273,17 +273,22 @@ fn reshape(inout b: Tensor, a: Tensor):
 
 @always_inline
 fn transpose(inout b: Tensor, a: Tensor):
-    
-    # we always tranpose along the last two dimensions of the tensor - vectorize? 
+    # we always tranpose along the last two dimensions of the tensor - vectorize?
     let num_dims = a.num_dims
-    let M = a.shape[num_dims-2]
-    let N = a.shape[num_dims-1]
+    let M = a.shape[num_dims - 2]
+    let N = a.shape[num_dims - 1]
 
-    for s in range(b.cap // (M*N)):
+    for s in range(b.cap // (M * N)):
         let offset = s * M * N
         for i in range(M):
-            for j in range(N):
-                b.set_data(offset + j * M + i, a.data.load(offset + i * N + j))
+
+            @parameter
+            fn v_transpose[nelts: Int](j: Int):
+                b.data.simd_store[nelts](
+                    offset + j * M + i, a.data.simd_load[nelts](offset + i * N + j)
+                )
+
+            vectorize[nelts, v_transpose](N)
 
 
 @always_inline
