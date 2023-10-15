@@ -335,17 +335,22 @@ fn softmax_grad(b: Tensor, inout a: Tensor):
             vectorize[nelts, v_softmax_grad_outer](N)
 
 @always_inline
-fn mse_grad(c: Tensor, inout a: Tensor, inout b: Tensor): # a: TrueVals, b: Logits
+fn mse_grad(c: Tensor, inout a: Tensor, inout b: Tensor):  # a: TrueVals, b: Logits
     let num_dims = a.num_dims
-    let M = a.shape[num_dims-2]
-    let N = a.shape[num_dims-1]
+    let M = a.shape[num_dims - 2]
+    let N = a.shape[num_dims - 1]
 
-    for index in range(a.cap):
-        let grad = Float32(2) * (b.data.load(index) - a.data.load(index)) / Float32(a.cap)
-        if(a.requires_grad):
-            a.grad.store(index, a.grad.load(index) + grad) 
-        if(b.requires_grad):
-            b.grad.store(index, b.grad.load(index) + grad) 
+    @parameter
+    fn v_mse_grad[nelts: Int](index: Int):
+        let grad = Float32(2) * (
+            b.data.simd_load[nelts](index) - a.data.simd_load[nelts](index)
+        ) / Float32(a.cap)
+        if a.requires_grad:
+            a.grad.simd_store[nelts](index, a.grad.simd_load[nelts](index) + grad)
+        if b.requires_grad:
+            b.grad.simd_store[nelts](index, b.grad.simd_load[nelts](index) + grad)
+
+    vectorize[nelts, v_mse_grad](a.cap)
 
 @always_inline
 fn ce_grad(c: Tensor, inout a: Tensor, inout b: Tensor): # a: TrueVals, b: Logits
