@@ -4,9 +4,10 @@ from memory import memset_zero, memcpy
 from random import rand
 from runtime.llcl import Runtime
 from time import now
-from algorithm import vectorize, parallelize
+from algorithm import vectorize, parallelize, unroll
 from random import rand, random_si64, seed, randint
 from math import sin, cos, log, sqrt, exp, min, max
+
 
 from ..graph.tensor import Tensor
 from ..operators.forward import mul, add, sum, conv_2d, relu, max_pool_2d, softmax, mse, ce, reshape, transpose, copy
@@ -23,6 +24,7 @@ struct Module:
     var num_passes: Int
     var forward_durations: DynamicVector[Int]
     var backward_durations: DynamicVector[Int]
+    var operation_labels: DynamicVector[Pointer[StringLiteral]]
 
     fn __init__(inout self):
         self.tensors = DynamicVector[Tensor](0)
@@ -32,9 +34,29 @@ struct Module:
         self.num_passes = 0
         self.forward_durations = DynamicVector[Int](12) # 0: mul, 1: add, 2: conv_2d,, 3: relu, 4: max_pool_2d, 5: sum, 6: softmax, 7: mse, 8: ce, 9: reshape, 10: transpose, 11: copy
         self.backward_durations = DynamicVector[Int](12) # 0: mul, 1: add, 2: conv_2d,, 3: relu, 4: max_pool_2d, 5: sum, 6: softmax, 7: mse, 8: ce, 9: reshape, 10: transpose, 11: copy
-        for i in range(12):
-            self.forward_durations[i] = 0
-            self.backward_durations[i] = 0
+        self.operation_labels = DynamicVector[Pointer[StringLiteral]](12)
+        var operation_labels = [
+            "mul:           ", 
+            "add:           ", 
+            "conv2d:        ", 
+            "relu:          ", 
+            "max_pool_2d:   ", 
+            "sum:           ",
+            "softmax:       ", 
+            "mse:           ", 
+            "ce:            ", 
+            "reshape:       ",
+            "transpose:     ", 
+            "copy:          ",
+        ]
+        @parameter
+        fn loop[idx: Int]():
+            self.forward_durations[idx] = 0
+            self.backward_durations[idx] = 0
+            let ptr = Pointer[StringLiteral].alloc(1)
+            ptr.store(0, operation_labels.get[idx, StringLiteral]())
+            self.operation_labels[idx] = ptr
+        unroll[12, loop]()
 
     @always_inline
     fn add_to_graph(inout self, inout a: Tensor):
@@ -650,31 +672,13 @@ struct Module:
             if(self.forward_durations[i] > 0):
                 summed_duration += self.forward_durations[i]
 
+        let average_ms_divisor = Float32(1_000_000 * self.num_passes)
         print("\nAverage time spent in each operation per forward pass:")
-        if(self.forward_durations[0] > 0):
-            print("mul:           ", Float32(self.forward_durations[0]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.forward_durations[0])/summed_duration,"% )")
-        if(self.forward_durations[1] > 0):
-            print("add:           ", Float32(self.forward_durations[1]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.forward_durations[1])/summed_duration,"% )")
-        if(self.forward_durations[2] > 0):
-            print("conv_2d:       ", Float32(self.forward_durations[2]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.forward_durations[2])/summed_duration,"% )")
-        if(self.forward_durations[3] > 0):
-            print("relu:          ", Float32(self.forward_durations[3]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.forward_durations[3])/summed_duration,"% )")
-        if(self.forward_durations[4] > 0):
-            print("max_pool_2d:   ", Float32(self.forward_durations[4]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.forward_durations[4])/summed_duration,"% )")
-        if(self.forward_durations[5] > 0):
-            print("sum:           ", Float32(self.forward_durations[5]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.forward_durations[5])/summed_duration,"% )")
-        if(self.forward_durations[6] > 0):
-            print("softmax:       ", Float32(self.forward_durations[6]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.forward_durations[6])/summed_duration,"% )")
-        if(self.forward_durations[7] > 0):
-            print("mse:           ", Float32(self.forward_durations[7]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.forward_durations[7])/summed_duration,"% )")
-        if(self.forward_durations[8] > 0):
-            print("ce:            ", Float32(self.forward_durations[8]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.forward_durations[8])/summed_duration,"% )")
-        if(self.forward_durations[9] > 0):
-            print("reshape:       ", Float32(self.forward_durations[9]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.forward_durations[9])/summed_duration,"% )")
-        if(self.forward_durations[10] > 0):
-            print("transpose:     ", Float32(self.forward_durations[10]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.forward_durations[10])/summed_duration,"% )")
-        if(self.forward_durations[11] > 0):
-            print("copy:          ", Float32(self.forward_durations[11]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.forward_durations[11])/summed_duration,"% )")
+        @parameter
+        fn loop[idx: Int]():
+            if self.forward_durations[idx] > 0:
+                print(self.operation_labels[idx].load(0), Float32(self.forward_durations[idx]) / average_ms_divisor, "ms", " (", 100.0 * Float32(self.forward_durations[idx])/summed_duration,"% )")
+        unroll[12, loop]()
         
 
     @always_inline
@@ -684,30 +688,13 @@ struct Module:
             if(self.backward_durations[i] > 0):
                 summed_duration += self.backward_durations[i]
 
+        let average_ms_divisor = Float32(1_000_000 * self.num_passes)
         print("\nAverage time spent in each operation per backward pass:")
-        if(self.forward_durations[0] > 0):
-            print("mul:           ", Float32(self.backward_durations[0]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.backward_durations[0])/summed_duration,"% )")
-        if(self.backward_durations[1] > 0):
-            print("add:           ", Float32(self.backward_durations[1]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.backward_durations[1])/summed_duration,"% )")
-        if(self.backward_durations[2] > 0):
-            print("conv_2d:       ", Float32(self.backward_durations[2]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.backward_durations[2])/summed_duration,"% )")
-        if(self.backward_durations[3] > 0):
-            print("relu:          ", Float32(self.backward_durations[3]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.backward_durations[3])/summed_duration,"% )")
-        if(self.backward_durations[4] > 0):
-            print("max_pool_2d:   ", Float32(self.backward_durations[4]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.backward_durations[4])/summed_duration,"% )")
-        if(self.backward_durations[5] > 0):
-            print("sum:           ", Float32(self.backward_durations[5]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.backward_durations[5])/summed_duration,"% )")
-        if(self.backward_durations[6] > 0):
-            print("softmax:       ", Float32(self.backward_durations[6]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.backward_durations[6])/summed_duration,"% )")
-        if(self.backward_durations[7] > 0):
-            print("mse:           ", Float32(self.backward_durations[7]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.backward_durations[7])/summed_duration,"% )")
-        if(self.backward_durations[8] > 0):
-            print("ce:            ", Float32(self.backward_durations[8]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.backward_durations[8])/summed_duration,"% )")
-        if(self.backward_durations[9] > 0):
-            print("reshape:       ", Float32(self.backward_durations[9]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.backward_durations[9])/summed_duration,"% )")
-        if(self.backward_durations[10] > 0):
-            print("transpose:     ", Float32(self.backward_durations[10]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.backward_durations[10])/summed_duration,"% )")
-        if(self.backward_durations[11] > 0):
-            print("copy:          ", Float32(self.backward_durations[11]) / Float32(1000 * self.num_passes), "ms", " (",Float32(self.backward_durations[11])/summed_duration,"% )")
+        @parameter
+        fn loop[idx: Int]():
+            if self.backward_durations[idx] > 0:
+                let label: String = self.operation_labels[idx].load(0)
+                print(self.operation_labels[idx].load(0), Float32(self.backward_durations[idx]) / average_ms_divisor, "ms", " (", 100.0 * Float32(self.backward_durations[idx])/summed_duration,"% )")
+        unroll[12, loop]()
         
 
