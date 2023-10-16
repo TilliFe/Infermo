@@ -6,10 +6,12 @@ from runtime.llcl import Runtime
 from algorithm import vectorize, parallelize
 from random import rand, random_si64, seed, randint
 from math import sin, cos, log, sqrt, exp, min, max
+from sys.param_env import env_get_int
 
 from ..graph.tensor import Tensor
 
 alias nelts = simdwidthof[DType.float32]()
+alias workers = env_get_int["WORKERS", 0]()
 
 @always_inline
 fn mul_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
@@ -51,7 +53,7 @@ fn mul_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
                         let val = a.grad.load(index_a) + c.grad.load(index_c) * b.data.load(index_b) 
                         a.grad.store(index_a, val)
                     vectorize[nelts, dot](K)
-            parallelize[calc_row_1](M,M)
+            parallelize[calc_row_1](M, workers if workers > 0 else M)
 
         if(b.requires_grad):
             @parameter
@@ -65,7 +67,7 @@ fn mul_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
                         let val = b.grad.load(index_b) + a.data.load(index_a) * c.grad.load(index_c)  
                         b.grad.store(index_b, val)
                     vectorize[nelts, dot](N)
-            parallelize[calc_row_2](K,K)
+            parallelize[calc_row_2](K, workers if workers > 0 else K)
 
 @always_inline        
 fn add_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
@@ -246,7 +248,7 @@ fn conv_2d_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
                         let a_grad_index = index(p,j,x,y,a.shape[1],a.shape[2],a.shape[3])
                         a.grad.store( a_grad_index, a.grad.load(a_grad_index) + patch_sum)
 
-    parallelize[batch_loop](a.shape[0], a.shape[0])
+    parallelize[batch_loop](a.shape[0], workers if workers > 0 else a.shape[0])
 
 @always_inline
 fn max_pool_2d_grad(b: Tensor, inout a: Tensor):
