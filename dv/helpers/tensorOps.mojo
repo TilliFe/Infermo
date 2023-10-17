@@ -13,7 +13,7 @@ from ..helpers.shape import Vec, shape
 
 
 @always_inline
-fn conv_2d(inout nn: Module, inout x: Tensor, out_channels: Int, kernel_width: Int, kernel_height: Int, stride: Int, padding: Int, use_bias: Bool = True) -> Tensor:
+fn conv2d(inout nn: Module, inout x: Tensor, out_channels: Int, kernel_width: Int, kernel_height: Int, stride: Int, padding: Int, use_bias: Bool = True) -> Tensor:
     
     # init
     let batch_size = x.shape[0]
@@ -28,7 +28,7 @@ fn conv_2d(inout nn: Module, inout x: Tensor, out_channels: Int, kernel_width: I
         var ones = Tensor(shape(1,conv.shape[2]*conv.shape[3]))
         ones.fill(1.0)
         ones.requires_grad = False
-        var bias_ones = nn.mul(bias_raw,ones)
+        var bias_ones = nn.matmul(bias_raw,ones)
         var bias = nn.reshape(bias_ones,shape(out_channels,conv.shape[2],conv.shape[3]))
         return nn.add(conv,bias)
     else:
@@ -48,13 +48,13 @@ fn linear(inout nn: Module, inout x: Tensor, num_neurons: Int, add_bias : Bool =
         ones.fill(1)
         ones.requires_grad = False
         bias.fill(0.1)
-        var xW = nn.mul(x,W)    
-        var ob = nn.mul(ones,bias)
+        var xW = nn.matmul(x,W)    
+        var ob = nn.matmul(ones,bias)
         x = nn.add(xW,ob)
         if(activation == 'relu'):
             x = nn.relu(x)
     else:
-        x = nn.mul(x,W)
+        x = nn.matmul(x,W)
         if(activation == 'relu'):
             x = nn.relu(x)
     return x
@@ -118,7 +118,7 @@ fn scale(inout nn: Module, inout a: Tensor, scalar: Float32) -> Tensor:
             S.set_data(s*N*N + i*N+i, scalar)
     S.requires_grad = False
 
-    return nn.mul(a,S)
+    return nn.matmul(a,S)
 
 @always_inline
 fn mask(inout nn: Module, inout a: Tensor, l_value: Float32 = 0.0, u_value: Float32 = 1.0, dim: Int = 0) -> Tensor:
@@ -149,21 +149,21 @@ fn mask(inout nn: Module, inout a: Tensor, l_value: Float32 = 0.0, u_value: Floa
 fn embed(inout nn: Module, d_vocab: Int, d_Model: Int, batch_size: Int, init_std: Float32, inout x: Tensor) -> Tensor:
     var W_E = Tensor(shape(d_vocab,d_Model))
     W_E.randn(init_std)
-    return nn.mul(x,W_E)
+    return nn.matmul(x,W_E)
 
 
 @always_inline
 fn unembed(inout nn: Module, d_vocab: Int, d_Model: Int, batch_size: Int, init_std: Float32, inout x: Tensor) -> Tensor:
     var W_U = Tensor(shape(d_Model,d_vocab))
     W_U.randn(init_std)
-    return nn.mul(x, W_U)
+    return nn.matmul(x, W_U)
 
 
 @always_inline
 fn posembed(inout nn: Module, max_ctx: Int, d_Model: Int, batch_size: Int, init_std: Float32, inout x: Tensor) -> Tensor:
     var W_pos = Tensor(shape(max_ctx,d_Model))
     W_pos.randn(init_std)
-    return nn.mul(W_pos, x)
+    return nn.matmul(W_pos, x)
 
 
 @always_inline
@@ -183,21 +183,21 @@ fn attention(inout nn: Module, d_Model: Int, num_heads: Int, d_head: Int, n_ctx:
     W_O.randn(init_std)  
 
     # attention heads
-    var k = nn.mul(W_K,x_t)     # batch_size,num_heads,d_head,seq_len
-    var q = nn.mul(W_Q,x_t)     # batch_size,num_heads,d_head,seq_len
-    var v = nn.mul(W_V,x_t)     # batch_size,num_heads,d_head,seq_len
+    var k = nn.matmul(W_K,x_t)     # batch_size,num_heads,d_head,seq_len
+    var q = nn.matmul(W_Q,x_t)     # batch_size,num_heads,d_head,seq_len
+    var v = nn.matmul(W_V,x_t)     # batch_size,num_heads,d_head,seq_len
     var k_t = nn.transpose(k)   # batch_size,num_heads,seq_len,d_head
 
-    x = nn.mul(k_t,q)           # batch_size,num_heads,seq_len,seq_len
+    x = nn.matmul(k_t,q)           # batch_size,num_heads,seq_len,seq_len
     x = mask(nn, x, 0.0, -10000000.0, 1) 
     x = scale(nn, x, Float32(1.0)/(sqrt(Float32(d_head))))
     x = nn.softmax(x)           # batch_size,num_heads,seq_len,seq_len
-    x = nn.mul(v,x)             # batch_size,num_heads,d_head,seq_len
+    x = nn.matmul(v,x)             # batch_size,num_heads,d_head,seq_len
 
     # concatenate results of all heads
     x = nn.reshape(x,shape(batch_size, num_heads * d_head, seq_len)) 
     x = nn.transpose(x)     	# batch_size,seq_len,num_heads*d_head
-    return nn.mul(x,W_O)        # batch_size, seq_len, d_Model
+    return nn.matmul(x,W_O)        # batch_size, seq_len, d_Model
 
 
 fn mlp(inout nn: Module, d_Model: Int, d_mlp: Int, batch_size: Int, seq_len: Int, init_std: Float32, inout x: Tensor) -> Tensor:
@@ -212,7 +212,7 @@ fn mlp(inout nn: Module, d_Model: Int, d_mlp: Int, batch_size: Int, seq_len: Int
     var ones_in = Tensor(shape(1,seq_len))
     ones_in.fill(1)
     ones_in.requires_grad = False
-    var b_in = nn.mul(b_in_flat,ones_in)
+    var b_in = nn.matmul(b_in_flat,ones_in)
 
     var W_out = Tensor(shape(d_Model,d_mlp))
     W_out.randn(init_std)
@@ -221,13 +221,13 @@ fn mlp(inout nn: Module, d_Model: Int, d_mlp: Int, batch_size: Int, seq_len: Int
     var ones_out = Tensor(shape(1,seq_len))
     ones_out.fill(1)
     ones_out.requires_grad = False
-    var b_out = nn.mul(b_out_flat,ones_out)
+    var b_out = nn.matmul(b_out_flat,ones_out)
 
     # architecture
-    x = nn.mul(W_in, x_t)     # batch_size,d_mlp,seq_len
+    x = nn.matmul(W_in, x_t)     # batch_size,d_mlp,seq_len
     x = nn.add(x,b_in)        # batch_size,d_mlp,seq_len
     x = nn.relu(x)            # batch_size,d_mlp,seq_len
-    x = nn.mul(W_out,x)       # batch_size,d_Model,seq_len
+    x = nn.matmul(W_out,x)       # batch_size,d_Model,seq_len
     x = nn.add(x,b_out)       # batch_size,d_Model,seq_len
     return nn.transpose(x)    # batch_size,seq_len,d_model = shape(input)
 

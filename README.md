@@ -6,42 +6,46 @@
 - Dynamic, object-oriented Model definition
 - Automatic gradient computation.
 
-Infermo is currently a Proof-of-Concept. While it’s mainly functional, it’s still under optimization and currently operates on CPU only.
+**Heads up**: Mojo currently operates on CPU only. GPU support will come soon!
 
-> **New**: Print out average time spent in each operation in the forward or the backward pass. This gives insight into where optimization might be especially needed!
+## Available Operators
+The operators listed below are methods of the `Module` class, which orchestrates both forward and backward computations. Each operator accepts one or two `Tensor` objects as input.
 
+- **matmul**: Performs matrix multiplication of two tensors.
+- **conv2d**: Applies a 2D convolution over an input signal composed of several input planes.
+- **max_pool_2d**: Applies a 2D max pooling over an input signal composed of several input planes.
+- **sum**: Returns the sum of all elements in the input tensor.
+- **softmax**: Applies a softmax function. It is applied to all slices along dim, and will re-scale them so that the element-wise sum is 1.
+- **mse**: Calculates the mean squared error between each element in the input x and target.
+- **ce**: Computes cross entropy loss, often used for classification problems.
+- **reshape**: Returns a tensor with the same data and number of elements as input, but with the specified shape.
+- **transpose**: Returns a tensor that is a transposed version of input. The given dimensions are swapped.
+- **mean**: Computes the mean value for each channel of the input tensor in the spatial dimensions. (TODO)
+- **variance**: Computes the variance value for each channel of the input tensor in the spatial dimensions. (TODO)
+- **mul**: Performs element-wise multiplication of two tensors.
+- **add**: Performs element-wise addition of two tensors.
+- **sub**: Performs element-wise subtraction of two tensors.
+- **div**: Performs element-wise division of two tensors.
+- **sqrt**: Returns a new tensor with the square-root of the elements of input.
+- **abs**: Computes the absolute value of each element in input.
+- **exp2**: Computes 2 raised to the power of each element in input.
+- **exp**: Computes exponential of each element in input.
+- **log2**: Computes logarithm base 2 of each element in input.
+- **log**: Computes natural logarithm ln(x) of each element in input.
+- **sin, cos, tan, asin, acos, atan, sinh, cosh, tanh**: Trigonometric functions. Each computes trigonometric function of each element in input.
+- **relu**: Applies the rectified linear unit function element-wise. It replaces all negative values in the tensor with zero.
+- **copy**: Performs a deep copy of the input Tensor.
 
-## Overview
+**Note**: All binary operators in this library are designed to handle tensors of different `shape` through broadcasting.
 
-**High Level Operators**:
+## Advanced Operators
 
-- mlp, linear Layer with relu activation
-- (masked) Transformer Block
-- 2d Convolution, Max Pooling (still naive implementation)
+- **linear**: This operator represents a dense layer of neurons. It can be used with or without the ReLU activation function, providing flexibility in network design.
+- **mlp**: Similar to the dense operator, but specifically tailored for use within a transformer block.
+- **conv_2d**: Executes a convolution operation with a specified tensor, commonly used in convolutional neural networks.
+- **transformer_block, embed, unembed, pos_embed**: These are the fundamental building blocks of a Transformer model, providing the necessary operations for effective sequence transduction.
+- **DataLoader**: A utility for handling data. It reads, initializes, and loads data from a given .txt file, simplifying the data preparation process.
 
-**General Structs**:
-
-- **Tensor**: A Tensor is a multidimensional array. It is either a separate data holder or part of a computation graph (see Module).
-- **Module**: The Module is the Computation Graph and stores the relations between the Tensors (nodes).
-- **DataLoader**: The DataLoader reads in data from a .txt file (.csv coming soon). The read-in data is stored in a buffer. Batches of data get generated based on the specified sub-rows and sub-columns.
-
-**Tensor methods**:
-
-- **initialization**: Via the shape(\*Ints) function, e.g., 'var new_tensor = Tensor(shape(2,3,4))'
-- **data.load(index: Int)**: Returns the element at the index position. Attention: Does not take the shape of the Tensor into consideration.
-- **set_data(index: Int, value: Float32)**: Sets the entry at the index position.
-- **set_data(new_data: DTypeFloat32[DType.float32])**: If the capacities of the Tensors data and new_data are the same, the data in the Tensor gets efficiently replaced by new_data.
-- **etc.** (We recommend checking out the Tensor struct in the graph directory)
-
-**Module Operators**:
-Operators include mul, add, sum, relu, softmax, reshape (broadcast), mse, CE, transpose. Each operator takes one or two Tensors and performs a specific operation. For more details on each operator, please refer to the source code. \
-_Important:_ First, an object of type Module needs to be initialized, like so: 'var nn = Module()'. Then we can call the methods for example as follows: 'var res = nn.mul(tensor1,tensor2).
-
-- **forward(last_node: Tensor)**: Takes in one Tensor, computes one forward pass through the Network till the specified Tensor (compute node). Returns none.
-- **backward(last_node: Tensor)**: Takes in one Tensor, computes the gradients of the last Tensor (here: last_node) with respect to all prior Tensors (compute nodes). Returns none.
-- **optimize("optimization_algorithm",learning_rate,momentum)**: Optimizes the entire network where the gradients are known. Returns none.
-
-A more detailed overview is on its way. Stay tuned! 😊
 
 ## Example Code
 
@@ -165,7 +169,7 @@ fn main():
     B.fill(3)
 
     # perform computation
-    var C = nn.mul(A,B)
+    var C = nn.matmul(A,B)
     var D = nn.sum(C) # compute sum, since the gradient can only be computed of a scalar value
     nn.forward(C)
 

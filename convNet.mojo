@@ -1,4 +1,4 @@
-from dv import Tensor,Module,shape,conv_2d,max_pool_2d,linear,max,accuracy,DataLoader
+from dv import Tensor,Module,shape,conv2d,max_pool_2d,linear,max,accuracy,DataLoader
 
 # ######################### convolutional Neural Network (trained on MNIST dataset) ###########################################################
 
@@ -21,7 +21,7 @@ struct Model:
 
         # define Model architecture
         var x = self.nn.reshape(self.input,shape(self.input.shape[0],1,28,28))                                  # 64,1,28,28
-        x = conv_2d(self.nn,x,out_channels=4,kernel_width=5,kernel_height=5,stride=1,padding=0,use_bias=True)   # 64,4,24,24
+        x = conv2d(self.nn,x,out_channels=4,kernel_width=5,kernel_height=5,stride=1,padding=0,use_bias=True)   # 64,4,24,24
         x = self.nn.max_pool_2d(x,kernel_width=4,kernel_height=4,stride=4,padding=0)                            # 64,4,6,6
         x = self.nn.reshape(x,shape(64,144))                                                                    # 64,144
         x = linear(self.nn,x,64,True,'relu')                                                                    # 64,32

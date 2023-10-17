@@ -5,7 +5,7 @@ from random import rand
 from runtime.llcl import Runtime
 from algorithm import vectorize, parallelize
 from random import rand, random_si64, seed, randint
-from math import sin, cos, log, sqrt, exp, min, max
+from math import pow, max, min, sqrt, abs, exp2, exp, log2, log, cos, sin, tan, asin, acos, atan, cosh, sinh, tanh
 from sys.param_env import env_get_int
 
 from ..graph.tensor import Tensor
@@ -13,8 +13,10 @@ from ..graph.tensor import Tensor
 alias nelts = simdwidthof[DType.float32]()
 alias workers = env_get_int["WORKERS", 0]()
 
+# non-elementwise operators #####################################################################################
+
 @always_inline
-fn mul_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
+fn matmul_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
 
     let a_matrix_size = a.shape[a.num_dims-2] * a.shape[a.num_dims-1]
     let b_matrix_size = b.shape[b.num_dims-2] * b.shape[b.num_dims-1]
@@ -68,94 +70,6 @@ fn mul_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
                         b.grad.store(index_b, val)
                     vectorize[nelts, dot](N)
             parallelize[calc_row_2](K, workers if workers > 0 else K)
-
-@always_inline        
-fn add_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
-
-    # regular
-    if(a.num_dims == b.num_dims):
-        if(a.requires_grad):
-            @parameter
-            fn v_add_gr_1[nelts: Int](i: Int):
-                a.grad.simd_store[nelts](
-                    i, a.grad.simd_load[nelts](i) + c.grad.simd_load[nelts](i)
-                )
-            vectorize[nelts, v_add_gr_1](a.cap)
-        if(b.requires_grad):
-            @parameter
-            fn v_add_gr_2[nelts: Int](i: Int):
-                b.grad.simd_store[nelts](
-                    i, b.grad.simd_load[nelts](i) + c.grad.simd_load[nelts](i)
-                )
-            vectorize[nelts, v_add_gr_2](b.cap)
-
-    # consider broadcasting
-    else:
-        var offset_a: Int = 0
-        var offset_b: Int = 0
-        var offset_c: Int = 0
-        var ratio: Int = 0
-        var H = 0
-
-        if(a.num_dims > b.num_dims):
-            H = b.cap
-            ratio = a.cap // b.cap
-        else:
-            H = a.cap
-            ratio = b.cap // a.cap
-
-        for s in range(ratio):
-            if(a.num_dims > b.num_dims):
-                offset_a = s * H
-            else:
-                offset_b = s * H
-
-            offset_c = s * H
-            if(a.requires_grad):
-                @parameter
-                fn v_add_a[nelts: Int](i: Int):
-                    a.grad.simd_store[nelts](
-                        offset_a + i, a.grad.simd_load[nelts](offset_a + i) + c.grad.simd_load[nelts](offset_c + i)
-                    )
-                vectorize[nelts, v_add_a](H) 
-
-            if(b.requires_grad):
-                @parameter
-                fn v_add_b[nelts: Int](i: Int):
-                    b.grad.simd_store[nelts](
-                        offset_b + i, b.grad.simd_load[nelts](offset_b + i) + c.grad.simd_load[nelts](offset_c + i)
-                    )
-                vectorize[nelts, v_add_b](H) 
-
-    # # Loop over each image in the batch
-    # for i in range(a.shape[0]):
-    #     # Loop over each filter
-    #     for j in range(c.shape[0]):
-    #         # Loop over each channel
-    #         for x in range(b.shape[2]):
-    #             for y in range(b.shape[3]):
-    #                 var patch_sum: Float32 = 0.0
-
-    #                 # apply the convolution operation - vectorize?
-    #                 for k in range(a.shape[1]):
-    #                 # convolve the k-th channel of the i-th image with the k-th channel of the j-th filter
-    #                     for dx in range(c.shape[2]):
-    #                         for dy in range(c.shape[3]):                        
-    #                             # calculate input indices with consideration for padding and stride
-    #                             let ix = x * stride - padding + dx
-    #                             let iy = y * stride - padding + dy
-    #                             # Skip if index is out of bounds (this is 'zero' padding)
-    #                             if ix < 0 or iy < 0 or ix >= a.shape[2] or iy >= a.shape[3]:
-    #                                 continue
-    #                             let a_index = index(j, k, ix, iy, a.shape[1], a.shape[2], a.shape[3])
-    #                             let c_grad_index = index(i, k, dx, dy, a.shape[1], c.shape[2], c.shape[3])
-    #                             # add to patch sum
-    #                             patch_sum += a.data.load(a_index) * c.grad.load(c_grad_index)
-
-    #                 # Store patch sum into c after innermost loops
-    #                 let b_grad_index = index(i, j, x, y, c.shape[0], b.shape[2], b.shape[3])
-    #                 b.grad.store(b_grad_index, b.grad.load(b_grad_index) + patch_sum)
-
 
 @always_inline
 fn conv_2d_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
@@ -282,19 +196,11 @@ fn max_pool_2d_grad(b: Tensor, inout a: Tensor):
                     let b_grad_idx = index(p,i,(x)//stride,(y)//stride,b.shape[1],b.shape[2],b.shape[3])
                     a.grad.store(arg_max, a.grad.load(arg_max) + b.grad.load(b_grad_idx))
 
-@always_inline
-fn relu_grad(b: Tensor, inout a: Tensor):
-    @parameter
-    fn v_relu_bw[nelts: Int](i: Int):
-        let zeros = SIMD[DType.float32,nelts]()
-        a.grad.simd_store[nelts](
-            i, (a.data.simd_load[nelts](i) > zeros).cast[DType.float32]() * b.grad.simd_load[nelts](i) + a.grad.simd_load[nelts](i)
-        )
-    vectorize[nelts, v_relu_bw](a.cap)
 
 @always_inline
 fn sum_grad(b: Tensor, inout a: Tensor):
     a.fill_grad(1)
+
 
 @always_inline
 fn softmax_grad(b: Tensor, inout a: Tensor):
@@ -410,6 +316,414 @@ fn transpose_grad(b: Tensor, inout a: Tensor):
 
             vectorize[nelts, v_transpose](N)
 
+
 @always_inline
-fn copy_grad(b: Tensor, inout a: Tensor): 
+fn mean_grad(b: Tensor, inout a: Tensor): 
+    pass
+
+
+@always_inline
+fn variance_grad(b: Tensor, inout a: Tensor): 
+    pass
+
+
+# elementwise operators #####################################################################################################
+
+@always_inline        
+fn e_mul_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
+
+    # regular
+    if(a.num_dims == b.num_dims):
+        if(a.requires_grad):
+            @parameter
+            fn v_mul_gr_1[nelts: Int](i: Int):
+                a.grad.simd_store[nelts](
+                    i, a.grad.simd_load[nelts](i) + b.data.simd_load[nelts](i) * c.grad.simd_load[nelts](i)
+                )
+            vectorize[nelts, v_mul_gr_1](a.cap)
+        if(b.requires_grad):
+            @parameter
+            fn v_mul_gr_2[nelts: Int](i: Int):
+                b.grad.simd_store[nelts](
+                    i, b.grad.simd_load[nelts](i) + a.data.simd_load[nelts](i) * c.grad.simd_load[nelts](i)
+                )
+            vectorize[nelts, v_mul_gr_2](b.cap)
+
+    # consider broadcasting
+    else:
+        var offset_a: Int = 0
+        var offset_b: Int = 0
+        var offset_c: Int = 0
+        var ratio: Int = 0
+        var H = 0
+
+        if(a.num_dims > b.num_dims):
+            H = b.cap
+            ratio = a.cap // b.cap
+        else:
+            H = a.cap
+            ratio = b.cap // a.cap
+
+        for s in range(ratio):
+            if(a.num_dims > b.num_dims):
+                offset_a = s * H
+            else:
+                offset_b = s * H
+
+            offset_c = s * H
+            if(a.requires_grad):
+                @parameter
+                fn v_mul_a[nelts: Int](i: Int):
+                    a.grad.simd_store[nelts](
+                        offset_a + i, a.grad.simd_load[nelts](offset_a + i) + b.data.simd_load[nelts](offset_b + i) * c.grad.simd_load[nelts](offset_c + i)
+                    )
+                vectorize[nelts, v_mul_a](H) 
+
+            if(b.requires_grad):
+                @parameter
+                fn v_mul_b[nelts: Int](i: Int):
+                    b.grad.simd_store[nelts](
+                        offset_b + i, b.grad.simd_load[nelts](offset_b + i) + a.data.simd_load[nelts](offset_a + i) * c.grad.simd_load[nelts](offset_c + i)
+                    )
+                vectorize[nelts, v_mul_b](H) 
+
+
+@always_inline        
+fn e_add_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
+
+    # regular
+    if(a.num_dims == b.num_dims):
+        if(a.requires_grad):
+            @parameter
+            fn v_add_gr_1[nelts: Int](i: Int):
+                a.grad.simd_store[nelts](
+                    i, a.grad.simd_load[nelts](i) + c.grad.simd_load[nelts](i)
+                )
+            vectorize[nelts, v_add_gr_1](a.cap)
+        if(b.requires_grad):
+            @parameter
+            fn v_add_gr_2[nelts: Int](i: Int):
+                b.grad.simd_store[nelts](
+                    i, b.grad.simd_load[nelts](i) + c.grad.simd_load[nelts](i)
+                )
+            vectorize[nelts, v_add_gr_2](b.cap)
+
+    # consider broadcasting
+    else:
+        var offset_a: Int = 0
+        var offset_b: Int = 0
+        var offset_c: Int = 0
+        var ratio: Int = 0
+        var H = 0
+
+        if(a.num_dims > b.num_dims):
+            H = b.cap
+            ratio = a.cap // b.cap
+        else:
+            H = a.cap
+            ratio = b.cap // a.cap
+
+        for s in range(ratio):
+            if(a.num_dims > b.num_dims):
+                offset_a = s * H
+            else:
+                offset_b = s * H
+
+            offset_c = s * H
+            if(a.requires_grad):
+                @parameter
+                fn v_add_a[nelts: Int](i: Int):
+                    a.grad.simd_store[nelts](
+                        offset_a + i, a.grad.simd_load[nelts](offset_a + i) + c.grad.simd_load[nelts](offset_c + i)
+                    )
+                vectorize[nelts, v_add_a](H) 
+
+            if(b.requires_grad):
+                @parameter
+                fn v_add_b[nelts: Int](i: Int):
+                    b.grad.simd_store[nelts](
+                        offset_b + i, b.grad.simd_load[nelts](offset_b + i) + c.grad.simd_load[nelts](offset_c + i)
+                    )
+                vectorize[nelts, v_add_b](H) 
+
+
+@always_inline        
+fn e_sub_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
+
+    # regular
+    if(a.num_dims == b.num_dims):
+        if(a.requires_grad):
+            @parameter
+            fn v_sub_gr_1[nelts: Int](i: Int):
+                a.grad.simd_store[nelts](
+                    i, a.grad.simd_load[nelts](i) + c.grad.simd_load[nelts](i)
+                )
+            vectorize[nelts, v_sub_gr_1](a.cap)
+        if(b.requires_grad):
+            @parameter
+            fn v_sub_gr_2[nelts: Int](i: Int):
+                b.grad.simd_store[nelts](
+                    i, b.grad.simd_load[nelts](i) - c.grad.simd_load[nelts](i)
+                )
+            vectorize[nelts, v_sub_gr_2](b.cap)
+
+    # consider broadcasting
+    else:
+        var offset_a: Int = 0
+        var offset_b: Int = 0
+        var offset_c: Int = 0
+        var ratio: Int = 0
+        var H = 0
+
+        if(a.num_dims > b.num_dims):
+            H = b.cap
+            ratio = a.cap // b.cap
+        else:
+            H = a.cap
+            ratio = b.cap // a.cap
+
+        for s in range(ratio):
+            if(a.num_dims > b.num_dims):
+                offset_a = s * H
+            else:
+                offset_b = s * H
+
+            offset_c = s * H
+            if(a.requires_grad):
+                @parameter
+                fn v_sub_a[nelts: Int](i: Int):
+                    a.grad.simd_store[nelts](
+                        offset_a + i, a.grad.simd_load[nelts](offset_a + i) + c.grad.simd_load[nelts](offset_c + i)
+                    )
+                vectorize[nelts, v_sub_a](H) 
+
+            if(b.requires_grad):
+                @parameter
+                fn v_sub_b[nelts: Int](i: Int):
+                    b.grad.simd_store[nelts](
+                        offset_b + i, b.grad.simd_load[nelts](offset_b + i) - c.grad.simd_load[nelts](offset_c + i)
+                    )
+                vectorize[nelts, v_sub_b](H) 
+
+
+@always_inline        
+fn e_div_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
+
+    # regular
+    if(a.num_dims == b.num_dims):
+        if(a.requires_grad):
+            @parameter
+            fn v_div_gr_1[nelts: Int](i: Int):
+                a.grad.simd_store[nelts](
+                    i, a.grad.simd_load[nelts](i) + c.grad.simd_load[nelts](i)
+                )
+            vectorize[nelts, v_div_gr_1](a.cap)
+        if(b.requires_grad):
+            @parameter
+            fn v_div_gr_2[nelts: Int](i: Int):
+                b.grad.simd_store[nelts](
+                    i, b.grad.simd_load[nelts](i) + c.grad.simd_load[nelts](i)
+                )
+            vectorize[nelts, v_div_gr_2](b.cap)
+
+    # consider broadcasting
+    else:
+        var offset_a: Int = 0
+        var offset_b: Int = 0
+        var offset_c: Int = 0
+        var ratio: Int = 0
+        var H = 0
+
+        if(a.num_dims > b.num_dims):
+            H = b.cap
+            ratio = a.cap // b.cap
+        else:
+            H = a.cap
+            ratio = b.cap // a.cap
+
+        for s in range(ratio):
+            if(a.num_dims > b.num_dims):
+                offset_a = s * H
+            else:
+                offset_b = s * H
+
+            offset_c = s * H
+            if(a.requires_grad):
+                @parameter
+                fn v_div_a[nelts: Int](i: Int):
+                    a.grad.simd_store[nelts](
+                        offset_a + i, a.grad.simd_load[nelts](offset_a + i) + c.grad.simd_load[nelts](offset_c + i) / b.data.simd_load[nelts](offset_b + i)
+                    )
+                vectorize[nelts, v_div_a](H) 
+
+            if(b.requires_grad):
+                @parameter
+                fn v_div_b[nelts: Int](i: Int):
+                    b.grad.simd_store[nelts](
+                        offset_b + i, b.grad.simd_load[nelts](offset_b + i) - c.grad.simd_load[nelts](offset_c + i) * a.data.simd_load[nelts](offset_a + i) / pow(b.data.simd_load[nelts](offset_b + i),2)
+                    )
+                vectorize[nelts, v_div_b](H) 
+
+
+@always_inline
+fn e_sqrt_grad(b: Tensor, inout a: Tensor):
+    @parameter
+    fn v_sqrt_grad[nelts: Int](i: Int):
+        a.grad.simd_store[nelts](
+            i, a.grad.simd_load[nelts](i) + b.grad.simd_load[nelts](i) / (Float32(2.0) * sqrt(a.data.simd_load[nelts](i)))
+        )
+    vectorize[nelts, v_sqrt_grad](a.cap)
+
+
+@always_inline
+fn e_abs_grad(b: Tensor, inout a: Tensor):
+    @parameter
+    fn v_abs_bw[nelts: Int](i: Int):
+        let zeros = SIMD[DType.float32,nelts]()
+        a.grad.simd_store[nelts](
+            i, a.grad.simd_load[nelts](i) + (Float32(2.0) * (a.data.simd_load[nelts](i) > zeros).cast[DType.float32]() - Float32(1.0)) * b.grad.simd_load[nelts](i)
+        )
+    vectorize[nelts, v_abs_bw](a.cap)
+
+
+@always_inline
+fn e_exp2_grad(b: Tensor, inout a: Tensor): 
+    @parameter
+    fn v_exp2_grad[nelts: Int](i: Int):
+        a.grad.simd_store[nelts](
+            i, a.grad.simd_load[nelts](i) + b.grad.simd_load[nelts](i) * b.data.simd_load[nelts](i) / log(Float32(2.0))
+        )
+    vectorize[nelts, v_exp2_grad](a.cap)
+
+
+@always_inline
+fn e_exp_grad(b: Tensor, inout a: Tensor):
+    @parameter
+    fn v_exp_grad[nelts: Int](i: Int):
+        a.grad.simd_store[nelts](
+            i, a.grad.simd_load[nelts](i) + b.grad.simd_load[nelts](i) * b.data.simd_load[nelts](i)
+        )
+    vectorize[nelts, v_exp_grad](a.cap)
+
+
+@always_inline
+fn e_log2_grad(b: Tensor, inout a: Tensor): 
+    @parameter
+    fn v_log2_grad[nelts: Int](i: Int):
+        a.grad.simd_store[nelts](
+            i, a.grad.simd_load[nelts](i) + b.grad.simd_load[nelts](i) / (a.data.simd_load[nelts](i) * log(Float32(2.0)))
+        )
+    vectorize[nelts, v_log2_grad](a.cap)
+
+
+@always_inline
+fn e_log_grad(b: Tensor, inout a: Tensor):
+    @parameter
+    fn v_log_grad[nelts: Int](i: Int):
+        a.grad.simd_store[nelts](
+            i, a.grad.simd_load[nelts](i) + b.grad.simd_load[nelts](i) / a.data.simd_load[nelts](i)
+        )
+    vectorize[nelts, v_log_grad](a.cap)
+
+
+@always_inline
+fn e_sin_grad(b: Tensor, inout a: Tensor):
+    @parameter
+    fn v_sin_grad[nelts: Int](i: Int):
+        a.grad.simd_store[nelts](
+            i, a.grad.simd_load[nelts](i) + b.grad.simd_load[nelts](i) * cos(a.data.simd_load[nelts](i))
+        )
+    vectorize[nelts, v_sin_grad](a.cap)
+
+@always_inline
+fn e_cos_grad(b: Tensor, inout a: Tensor):
+    @parameter
+    fn v_cos_bw[nelts: Int](i: Int):
+       a.grad.simd_store[nelts](
+            i, a.grad.simd_load[nelts](i) - b.grad.simd_load[nelts](i) * sin(a.data.simd_load[nelts](i))
+        )
+    vectorize[nelts, v_cos_bw](a.cap)
+
+@always_inline
+fn e_tan_grad(b: Tensor, inout a: Tensor):
+    @parameter
+    fn v_tan_bw[nelts: Int](i: Int):
+        a.grad.simd_store[nelts](
+            i, a.grad.simd_load[nelts](i) + b.grad.simd_load[nelts](i) / pow(cos(a.data.simd_load[nelts](i)),2) # 1.0 / sec^2(a)
+        )
+    vectorize[nelts, v_tan_bw](a.cap)
+
+
+@always_inline
+fn e_asin_grad(b: Tensor, inout a: Tensor):
+    @parameter
+    fn v_asin_bw[nelts: Int](i: Int):
+        a.grad.simd_store[nelts](
+            i, a.grad.simd_load[nelts](i) + b.grad.simd_load[nelts](i) / sqrt(Float32(1.0) - pow(a.data.simd_load[nelts](i),2))
+        )
+    vectorize[nelts, v_asin_bw](a.cap)
+
+
+@always_inline
+fn e_acos_grad(b: Tensor, inout a: Tensor):
+    @parameter
+    fn v_acos_bw[nelts: Int](i: Int):
+        a.grad.simd_store[nelts](
+            i, a.grad.simd_load[nelts](i) - b.grad.simd_load[nelts](i) / sqrt(Float32(1.0) - pow(a.data.simd_load[nelts](i),2))
+        )
+    vectorize[nelts, v_acos_bw](a.cap)
+
+@always_inline
+fn e_atan_grad(b: Tensor, inout a: Tensor):
+    @parameter
+    fn v_atan_bw[nelts: Int](i: Int):
+        a.grad.simd_store[nelts](
+            i, a.grad.simd_load[nelts](i) + b.grad.simd_load[nelts](i) / (Float32(1.0) + pow(a.data.simd_load[nelts](i),2))
+        )
+    vectorize[nelts, v_atan_bw](a.cap)
+
+
+@always_inline
+fn e_sinh_grad(b: Tensor, inout a: Tensor):
+    @parameter
+    fn v_sinh_bw[nelts: Int](i: Int):
+        a.grad.simd_store[nelts](
+            i, a.grad.simd_load[nelts](i) + b.grad.simd_load[nelts](i) * cosh(a.data.simd_load[nelts](i))
+        )
+    vectorize[nelts, v_sinh_bw](a.cap)
+
+
+@always_inline
+fn e_cosh_grad(b: Tensor, inout a: Tensor):
+    @parameter
+    fn v_cosh_bw[nelts: Int](i: Int):
+        a.grad.simd_store[nelts](
+            i, a.grad.simd_load[nelts](i) + b.grad.simd_load[nelts](i) * sinh(a.data.simd_load[nelts](i))
+        )
+    vectorize[nelts, v_cosh_bw](a.cap)
+
+
+@always_inline
+fn e_tanh_grad(b: Tensor, inout a: Tensor):
+    @parameter
+    fn v_tanh_bw[nelts: Int](i: Int):
+        a.grad.simd_store[nelts](
+            i, a.grad.simd_load[nelts](i) + b.grad.simd_load[nelts](i) / cosh(a.data.simd_load[nelts](i))
+        )
+    vectorize[nelts, v_tanh_bw](a.cap)
+
+
+@always_inline
+fn e_relu_grad(b: Tensor, inout a: Tensor):
+    @parameter
+    fn v_relu_bw[nelts: Int](i: Int):
+        let zeros = SIMD[DType.float32,nelts]()
+        a.grad.simd_store[nelts](
+            i, (a.data.simd_load[nelts](i) > zeros).cast[DType.float32]() * b.grad.simd_load[nelts](i) + a.grad.simd_load[nelts](i)
+        )
+    vectorize[nelts, v_relu_bw](a.cap)
+
+
+@always_inline
+fn e_copy_grad(b: Tensor, inout a: Tensor): 
     memcpy(a.grad,b.grad,a.cap)

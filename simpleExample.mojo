@@ -12,7 +12,7 @@ fn main():
     b.fill(3)
 
     # perform computation 
-    var c = nn.mul(a,b)
+    var c = nn.matmul(a,b)
     var D = nn.sum(c) # compute sum, since the grad can only be computed of a scalar value
     nn.forward(c)
 
