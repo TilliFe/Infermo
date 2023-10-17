@@ -182,10 +182,6 @@ fn main():
     B.print_grad()
 ```
 
-## TODO 🚀
-
-- More basic Operators/Loss-functions/Activations
-- more speedups via Vectorization and Paralleization
 
 ## Usage
 
