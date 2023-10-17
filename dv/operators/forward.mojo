@@ -6,10 +6,13 @@ from runtime.llcl import Runtime
 from algorithm import vectorize, parallelize
 from random import rand, random_si64, seed, randint
 from math import sin, cos, log, sqrt, exp, abs, max, min
+from sys.param_env import env_get_int
 
 from ..graph.tensor import Tensor
 
+
 alias nelts = simdwidthof[DType.float32]()
+alias workers = env_get_int["WORKERS", 0]()
 
 @always_inline
 fn mul(inout c: Tensor, a: Tensor, b: Tensor):
@@ -45,7 +48,7 @@ fn mul(inout c: Tensor, a: Tensor, b: Tensor):
                 fn dot[nelts: Int](n: Int):
                     c.data.simd_store[nelts](offset_c + m*N+n, c.data.simd_load[nelts](offset_c + m*N+n) + a.data.load(offset_a + m*K+k) * b.data.simd_load[nelts](offset_b + k*N+n))
                 vectorize[nelts, dot](N)
-        parallelize[calc_row](M,M)
+        parallelize[calc_row](M, workers if workers > 0 else M) 
 
 @always_inline
 fn add(inout c: Tensor, a: Tensor, b: Tensor):
@@ -119,7 +122,7 @@ fn conv_2d(inout c: Tensor, a: Tensor, b: Tensor):
                     let c_index = index(i, j, x, y, b.shape[0], c.shape[2], c.shape[3])
                     c.data.store(c_index, patch_sum)
 
-    parallelize[batch_loop](a.shape[0], a.shape[0])
+    parallelize[batch_loop](a.shape[0], workers if workers > 0 else a.shape[0])
 
 @always_inline
 fn max_pool_2d(inout b: Tensor, a: Tensor):
