@@ -16,7 +16,7 @@ struct Tensor:
     var num_dims: Int
     var cap: Int
     var shape: Pointer[Int]
-    var skips: Pointer[Int]
+    var strides: Pointer[Int]
     var data: DTypePointer[DType.float32]
     var grad: DTypePointer[DType.float32] 
     var velocity: DTypePointer[DType.float32] 
@@ -38,11 +38,11 @@ struct Tensor:
         for i in range(_num_dims):
             shape.store(i,_shape[i])
 
-        let skips = Pointer[Int].alloc(_num_dims)
-        memset_zero(skips,_num_dims)
-        skips.store(_num_dims-1,1)
+        let strides = Pointer[Int].alloc(_num_dims)
+        memset_zero(strides,_num_dims)
+        strides.store(_num_dims-1,1)
         for i in range(_num_dims-1):
-            skips.store(_num_dims - i - 2, skips.load(_num_dims - i - 1) * _shape[_num_dims - i - 1])
+            strides.store(_num_dims - i - 2, strides.load(_num_dims - i - 1) * _shape[_num_dims - i - 1])
 
         let data = DTypePointer[DType.float32].alloc(_cap)
         memset_zero(data, _cap)
@@ -68,7 +68,7 @@ struct Tensor:
             num_dims: _num_dims,
             cap: _cap,
             shape: shape,
-            skips: skips,
+            strides: strides,
             data: data,
             grad: grad,
             velocity: velocity,
@@ -103,11 +103,11 @@ struct Tensor:
         print_no_newline(" ]\n")
 
     @always_inline
-    fn print_skips(self):
+    fn print_strides(self):
         print_no_newline("[ ")
         let len = self.num_dims
         for i in range(len):
-            print_no_newline(self.skips.load(i))
+            print_no_newline(self.strides.load(i))
             if (i < len-1):
                 print_no_newline(", ")
         print_no_newline(" ]\n")
@@ -166,7 +166,7 @@ struct Tensor:
         let len = len(pos)
         var index = 0
         for j in range(len):
-            index += self.skips[j] * pos[j]
+            index += self.strides[j] * pos[j]
 
         self.data.store(index, val)
 
@@ -176,7 +176,7 @@ struct Tensor:
         let len = len(pos)
         var index = 0
         for j in range(len):
-            index += self.skips[j] * pos[j]
+            index += self.strides[j] * pos[j]
 
         self.data.store(index, val)
 
@@ -185,10 +185,10 @@ struct Tensor:
         let num_dims = self.num_dims
         let row: Int = self.shape[num_dims-2]
         let cols: Int = self.shape[num_dims-1]
-        let col_skips: Int = (self.skips[0] * self.shape[0]) // cols
+        let col_strides: Int = (self.strides[0] * self.shape[0]) // cols
         print_no_newline("<Tensor: ")
-        for i in range(col_skips):
-            if(col_skips > 10 and i > 4 and i < col_skips - 5):
+        for i in range(col_strides):
+            if(col_strides > 10 and i > 4 and i < col_strides - 5):
                 if(i == 5):
                     print("                 ... ")
                 continue
@@ -200,7 +200,7 @@ struct Tensor:
 
                 var indent = 0
                 for d in range(num_dims-1):
-                    if(cols * i % self.skips[d] == 0):
+                    if(cols * i % self.strides[d] == 0):
                         print_no_newline("[ ")
                         indent += 1
                     else:
@@ -218,10 +218,10 @@ struct Tensor:
                             print_no_newline(', ')
 
                 for d in range(num_dims-2,-1,-1):
-                    if(cols * (i + 1) % self.skips[d] == 0):
+                    if(cols * (i + 1) % self.strides[d] == 0):
                         print_no_newline(" ]")
 
-                if(i < col_skips-1):
+                if(i < col_strides-1):
                     print_no_newline(", ")
                     put_new_line()
                 else:
@@ -252,10 +252,10 @@ struct Tensor:
     fn print_grad(self):
         let num_dims = self.num_dims
         let cols: Int = self.shape[num_dims-1]
-        let col_skips: Int = (self.skips[0] * self.shape[0]) // cols
+        let col_strides: Int = (self.strides[0] * self.shape[0]) // cols
         print_no_newline("<Tensor: ")
-        for i in range(col_skips):
-            if(col_skips > 10 and i > 4 and i < col_skips - 5):
+        for i in range(col_strides):
+            if(col_strides > 10 and i > 4 and i < col_strides - 5):
                 if(i == 5):
                     print("                 ... ")
                 continue
@@ -267,7 +267,7 @@ struct Tensor:
 
                 var indent = 0
                 for d in range(num_dims-1):
-                    if(cols * i % self.skips[d] == 0):
+                    if(cols * i % self.strides[d] == 0):
                         print_no_newline("[ ")
                         indent += 1
                     else:
@@ -285,10 +285,10 @@ struct Tensor:
                             print_no_newline(', ')
 
                 for d in range(num_dims-2,-1,-1):
-                    if(cols * (i + 1) % self.skips[d] == 0):
+                    if(cols * (i + 1) % self.strides[d] == 0):
                         print_no_newline(" ]")
 
-                if(i < col_skips-1):
+                if(i < col_strides-1):
                     print_no_newline(", ")
                     put_new_line()
                 else:
@@ -320,7 +320,7 @@ struct Tensor:
         let len = len(pos)
         var index = 0
         for j in range(len):
-            index += self.skips[j] * pos[j]
+            index += self.strides[j] * pos[j]
 
         self.velocity.store(index, val)
 
@@ -330,7 +330,7 @@ struct Tensor:
         let len = len(pos)
         var index = 0
         for j in range(len):
-            index += self.skips[j] * pos[j]
+            index += self.strides[j] * pos[j]
 
         self.velocity.store(index, val)
 
@@ -339,10 +339,10 @@ struct Tensor:
         let num_dims = self.num_dims
         let row: Int = self.shape[num_dims-2]
         let cols: Int = self.shape[num_dims-1]
-        let col_skips: Int = (self.skips[0] * self.shape[0]) // cols
+        let col_strides: Int = (self.strides[0] * self.shape[0]) // cols
         print_no_newline("<Tensor: ")
-        for i in range(col_skips):
-            if(col_skips > 10 and i > 4 and i < col_skips - 5):
+        for i in range(col_strides):
+            if(col_strides > 10 and i > 4 and i < col_strides - 5):
                 if(i == 5):
                     print("                 ... ")
                 continue
@@ -354,7 +354,7 @@ struct Tensor:
 
                 var indent = 0
                 for d in range(num_dims-1):
-                    if(cols * i % self.skips[d] == 0):
+                    if(cols * i % self.strides[d] == 0):
                         print_no_newline("[ ")
                         indent += 1
                     else:
@@ -372,10 +372,10 @@ struct Tensor:
                             print_no_newline(', ')
 
                 for d in range(num_dims-2,-1,-1):
-                    if(cols * (i + 1) % self.skips[d] == 0):
+                    if(cols * (i + 1) % self.strides[d] == 0):
                         print_no_newline(" ]")
 
-                if(i < col_skips-1):
+                if(i < col_strides-1):
                     print_no_newline(", ")
                     put_new_line()
                 else:
@@ -412,10 +412,10 @@ struct Tensor:
         let num_dims = self.num_dims
         let row: Int = self.shape[num_dims-2]
         let cols: Int = self.shape[num_dims-1]
-        let col_skips: Int = (self.skips[0] * self.shape[0]) // cols
+        let col_strides: Int = (self.strides[0] * self.shape[0]) // cols
         print_no_newline("<Tensor: ")
-        for i in range(col_skips):
-            if(col_skips > 10 and i > 4 and i < col_skips - 5):
+        for i in range(col_strides):
+            if(col_strides > 10 and i > 4 and i < col_strides - 5):
                 if(i == 5):
                     print("                 ... ")
                 continue
@@ -427,7 +427,7 @@ struct Tensor:
 
                 var indent = 0
                 for d in range(num_dims-2):
-                    if(cols * i % self.skips[d] == 0):
+                    if(cols * i % self.strides[d] == 0):
                         print_no_newline("[ ")
                         indent += 1
                     else:
@@ -444,10 +444,10 @@ struct Tensor:
                         max_idx = max_counter                   
                 print_no_newline(max_idx)
                 for d in range(num_dims-2,0,-1):
-                    if(cols * (i + 1) % self.skips[d] == 0):
+                    if(cols * (i + 1) % self.strides[d] == 0):
                         print_no_newline(" ]")
 
-                if(i < col_skips-1):
+                if(i < col_strides-1):
                     print_no_newline(", ")
                     put_new_line()
                 else:

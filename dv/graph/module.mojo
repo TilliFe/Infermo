@@ -9,8 +9,8 @@ from random import rand, random_si64, seed, randint
 from math import sin, cos, log, sqrt, exp, min, max
 
 from ..graph.tensor import Tensor
-from ..operators.forward import matmul, conv_2d, max_pool_2d, sum, softmax, mse, ce, reshape, transpose, mean, variance, e_mul, e_add, e_sub, e_div, e_sqrt, e_abs, e_exp2, e_exp, e_log2, e_log, e_sin, e_cos, e_tan, e_asin, e_acos, e_atan, e_sinh, e_cosh, e_tanh, e_relu, e_copy
-from ..operators.backward import matmul_grad, conv_2d_grad, max_pool_2d_grad, sum_grad, softmax_grad, mse_grad, ce_grad, reshape_grad, transpose_grad, mean_grad, variance_grad, e_mul_grad, e_add_grad, e_sub_grad, e_div_grad, e_sqrt_grad, e_abs_grad, e_exp2_grad, e_exp_grad, e_log2_grad, e_log_grad, e_sin_grad, e_cos_grad, e_tan_grad, e_asin_grad, e_acos_grad, e_atan_grad, e_sinh_grad, e_cosh_grad, e_tanh_grad, e_relu_grad, e_copy_grad 
+from ..operators.forward import matmul, conv_2d, max_pool_2d, sum, softmax, mse, ce, reshape, transpose, mean, variance, std, e_mul, e_add, e_sub, e_div, e_sqrt, e_abs, e_exp2, e_exp, e_log2, e_log, e_sin, e_cos, e_tan, e_asin, e_acos, e_atan, e_sinh, e_cosh, e_tanh, e_relu, e_copy
+from ..operators.backward import matmul_grad, conv_2d_grad, max_pool_2d_grad, sum_grad, softmax_grad, mse_grad, ce_grad, reshape_grad, transpose_grad, mean_grad, variance_grad, std_grad, e_mul_grad, e_add_grad, e_sub_grad, e_div_grad, e_sqrt_grad, e_abs_grad, e_exp2_grad, e_exp_grad, e_log2_grad, e_log_grad, e_sin_grad, e_cos_grad, e_tan_grad, e_asin_grad, e_acos_grad, e_atan_grad, e_sinh_grad, e_cosh_grad, e_tanh_grad, e_relu_grad, e_copy_grad 
 from ..helpers.shape import shape, Vec
 
 alias nelts = simdwidthof[DType.float32]()
@@ -32,8 +32,8 @@ struct Module:
         self.forward_tape = DynamicVector[Int]()
         self.backward_tape = DynamicVector[Int]()
         self.num_passes = 0
-        self.forward_durations = DynamicVector[Int](32) # 0: matmul, 1: add, 2: conv_2d,, 3: relu, 4: max_pool_2d, 5: sum, 6: softmax, 7: mse, 8: ce, 9: reshape, 10: transpose, 11: copy
-        self.backward_durations = DynamicVector[Int](32) # 0: matmul, 1: add, 2: conv_2d,, 3: relu, 4: max_pool_2d, 5: sum, 6: softmax, 7: mse, 8: ce, 9: reshape, 10: transpose, 11: copy
+        self.forward_durations = DynamicVector[Int](32) 
+        self.backward_durations = DynamicVector[Int](32) 
         self.operation_labels = DynamicVector[Pointer[StringLiteral]](32)
         var operation_labels = [
             "matmul:        ", 
@@ -47,6 +47,7 @@ struct Module:
             "transpose:     ",
             "mean:          ",
             "variance:      ",
+            "std            ",   
             "mul:           ",
             "add:           ", 
             "sub:           ", 
@@ -394,45 +395,89 @@ struct Module:
 
     
     @always_inline
-    fn mean(inout self, inout a: Tensor) -> Tensor: pass
+    fn mean(inout self, inout a: Tensor, dim: DynamicVector[Int]) -> Tensor: 
 
-        # var new_shape = DynamicVector[Int]()
-        # for i in range(a.num_dims):
-        #     new_shape.push_back(a.shape[i])
+        var new_shape = DynamicVector[Int]()
+        for i in range(a.num_dims):
+            new_shape.push_back(a.shape[i])
 
-        # var b = Tensor(new_shape)
+        for i in range(len(dim)):
+            new_shape[dim[i]] = 1
 
-        # b.set_name('mean')
+        var b = Tensor(new_shape)
 
-        # if(not a.in_tensors):
-        #     b.add_parent(self.counter)
-        #     self.add_to_graph(a)
-        # else:
-        #     b.add_parent(a.id)
-        # self.add_to_graph(b)
+        # pass the dim list to the result tensor as otherParams
+        b.other_params.store(0,len(dim)) # store the num of dims first
+        for i in range(len(dim)):
+            b.other_params.store(i+1,dim[i])
 
-        # return b
+        b.set_name('mean')
+
+        if(not a.in_tensors):
+            b.add_parent(self.counter)
+            self.add_to_graph(a)
+        else:
+            b.add_parent(a.id)
+        self.add_to_graph(b)
+
+        return b
 
 
     @always_inline
-    fn variance(inout self, inout a: Tensor) -> Tensor: pass
+    fn variance(inout self, inout a: Tensor, dim: DynamicVector[Int]) -> Tensor: 
 
-        # var new_shape = DynamicVector[Int]()
-        # for i in range(a.num_dims):
-        #     new_shape.push_back(a.shape[i])
+        var new_shape = DynamicVector[Int]()
+        for i in range(a.num_dims):
+            new_shape.push_back(a.shape[i])
 
-        # var b = Tensor(new_shape)
+        for i in range(len(dim)):
+            new_shape[dim[i]] = 1
 
-        # b.set_name('variance')
+        var b = Tensor(new_shape)
 
-        # if(not a.in_tensors):
-        #     b.add_parent(self.counter)
-        #     self.add_to_graph(a)
-        # else:
-        #     b.add_parent(a.id)
-        # self.add_to_graph(b)
+        # pass the dim list to the result tensor as otherParams
+        b.other_params.store(0,len(dim)) # store the num of dims first
+        for i in range(len(dim)):
+            b.other_params.store(i+1,dim[i])
 
-        # return b
+        b.set_name('variance')
+
+        if(not a.in_tensors):
+            b.add_parent(self.counter)
+            self.add_to_graph(a)
+        else:
+            b.add_parent(a.id)
+        self.add_to_graph(b)
+
+        return b
+
+    @always_inline
+    fn std(inout self, inout a: Tensor, dim: DynamicVector[Int]) -> Tensor: 
+
+        var new_shape = DynamicVector[Int]()
+        for i in range(a.num_dims):
+            new_shape.push_back(a.shape[i])
+
+        for i in range(len(dim)):
+            new_shape[dim[i]] = 1
+
+        var b = Tensor(new_shape)
+
+        # pass the dim list to the result tensor as otherParams
+        b.other_params.store(0,len(dim)) # store the num of dims first
+        for i in range(len(dim)):
+            b.other_params.store(i+1,dim[i])
+
+        b.set_name('std')
+
+        if(not a.in_tensors):
+            b.add_parent(self.counter)
+            self.add_to_graph(a)
+        else:
+            b.add_parent(a.id)
+        self.add_to_graph(b)
+
+        return b
 
 
     
@@ -443,26 +488,38 @@ struct Module:
 
         let a_num_dims = a.num_dims
         let b_num_dims = b.num_dims
-        # if(a.shape[a_num_dims-2] != b.shape[b_num_dims-2] or a.shape[a_num_dims-1] != b.shape[b_num_dims-1]):
-        #     print("Error (at add): For Matrix addition, Matrices need to in the following shape: c[mxn] = a[mxn] + b[mxn]")
 
         # init result Tensor 
-        var new_shape = DynamicVector[Int](0)
-        
-        # regular
-        if(a_num_dims == b_num_dims):
-            for i in range(b_num_dims):
-                new_shape.push_back(a.shape[i])
+        var new_shape = DynamicVector[Int]()
+        var new_shape_reversed = DynamicVector[Int]()
 
-        # broadcast a
-        elif(b_num_dims > a_num_dims):
-            for i in range(b_num_dims):
-                new_shape.push_back(b.shape[i])
+        # Calculate the maximum number of dimensions
+        let max_dims = max(a.num_dims, b.num_dims)
 
-        # broadcast b 
-        elif(a_num_dims > b_num_dims):
-            for i in range(a_num_dims):
-                new_shape.push_back(a.shape[i])  
+        for i in range(max_dims-1, -1, -1):
+            # Calculate the corresponding index for a and b
+            let idx_a = i - (max_dims - a.num_dims)
+            let idx_b = i - (max_dims - b.num_dims)
+
+            # Check if the index is valid for both tensors
+            if (idx_a >= 0 and idx_b >= 0):
+                if (a.shape[idx_a] == 1 and b.shape[idx_b] != 1) :
+                    new_shape_reversed.push_back(b.shape[idx_b])
+                elif (a.shape[idx_a] != 1 and b.shape[idx_b] == 1) :
+                    new_shape_reversed.push_back(a.shape[idx_a])
+                elif (a.shape[idx_a] == b.shape[idx_b]) :
+                    new_shape_reversed.push_back(a.shape[idx_a])
+                else :
+                    print("Error (at mul): shapes are not compatible for broadcasting")
+                
+            elif (idx_a >= 0) :  # The index is only valid for a
+                new_shape_reversed.push_back(a.shape[idx_a])
+            else :  # The index is only valid for b
+                new_shape_reversed.push_back(b.shape[idx_b])
+
+        # Reverse the shape to get the correct order
+        for i in range(len(new_shape_reversed)):
+            new_shape.push_back(new_shape_reversed[len(new_shape_reversed)-1-i])
 
         var c = Tensor(new_shape)
 
@@ -489,26 +546,38 @@ struct Module:
 
         let a_num_dims = a.num_dims
         let b_num_dims = b.num_dims
-        # if(a.shape[a_num_dims-2] != b.shape[b_num_dims-2] or a.shape[a_num_dims-1] != b.shape[b_num_dims-1]):
-        #     print("Error (at add): For Matrix addition, Matrices need to in the following shape: c[mxn] = a[mxn] + b[mxn]")
 
         # init result Tensor 
-        var new_shape = DynamicVector[Int](0)
-        
-        # regular
-        if(a_num_dims == b_num_dims):
-            for i in range(b_num_dims):
-                new_shape.push_back(a.shape[i])
+        var new_shape = DynamicVector[Int]()
+        var new_shape_reversed = DynamicVector[Int]()
 
-        # broadcast a
-        elif(b_num_dims > a_num_dims):
-            for i in range(b_num_dims):
-                new_shape.push_back(b.shape[i])
+        # Calculate the maximum number of dimensions
+        let max_dims = max(a.num_dims, b.num_dims)
 
-        # broadcast b 
-        elif(a_num_dims > b_num_dims):
-            for i in range(a_num_dims):
-                new_shape.push_back(a.shape[i])  
+        for i in range(max_dims-1, -1, -1):
+            # Calculate the corresponding index for a and b
+            let idx_a = i - (max_dims - a.num_dims)
+            let idx_b = i - (max_dims - b.num_dims)
+
+            # Check if the index is valid for both tensors
+            if (idx_a >= 0 and idx_b >= 0):
+                if (a.shape[idx_a] == 1 and b.shape[idx_b] != 1) :
+                    new_shape_reversed.push_back(b.shape[idx_b])
+                elif (a.shape[idx_a] != 1 and b.shape[idx_b] == 1) :
+                    new_shape_reversed.push_back(a.shape[idx_a])
+                elif (a.shape[idx_a] == b.shape[idx_b]) :
+                    new_shape_reversed.push_back(a.shape[idx_a])
+                else :
+                    print("Error (at mul): shapes are not compatible for broadcasting")
+                
+            elif (idx_a >= 0) :  # The index is only valid for a
+                new_shape_reversed.push_back(a.shape[idx_a])
+            else :  # The index is only valid for b
+                new_shape_reversed.push_back(b.shape[idx_b])
+
+        # Reverse the shape to get the correct order
+        for i in range(len(new_shape_reversed)):
+            new_shape.push_back(new_shape_reversed[len(new_shape_reversed)-1-i])
 
         var c = Tensor(new_shape)
 
@@ -534,26 +603,38 @@ struct Module:
 
         let a_num_dims = a.num_dims
         let b_num_dims = b.num_dims
-        # if(a.shape[a_num_dims-2] != b.shape[b_num_dims-2] or a.shape[a_num_dims-1] != b.shape[b_num_dims-1]):
-        #     print("Error (at add): For Matrix addition, Matrices need to in the following shape: c[mxn] = a[mxn] + b[mxn]")
 
         # init result Tensor 
-        var new_shape = DynamicVector[Int](0)
-        
-        # regular
-        if(a_num_dims == b_num_dims):
-            for i in range(b_num_dims):
-                new_shape.push_back(a.shape[i])
+        var new_shape = DynamicVector[Int]()
+        var new_shape_reversed = DynamicVector[Int]()
 
-        # broadcast a
-        elif(b_num_dims > a_num_dims):
-            for i in range(b_num_dims):
-                new_shape.push_back(b.shape[i])
+        # Calculate the maximum number of dimensions
+        let max_dims = max(a.num_dims, b.num_dims)
 
-        # broadcast b 
-        elif(a_num_dims > b_num_dims):
-            for i in range(a_num_dims):
-                new_shape.push_back(a.shape[i])  
+        for i in range(max_dims-1, -1, -1):
+            # Calculate the corresponding index for a and b
+            let idx_a = i - (max_dims - a.num_dims)
+            let idx_b = i - (max_dims - b.num_dims)
+
+            # Check if the index is valid for both tensors
+            if (idx_a >= 0 and idx_b >= 0):
+                if (a.shape[idx_a] == 1 and b.shape[idx_b] != 1) :
+                    new_shape_reversed.push_back(b.shape[idx_b])
+                elif (a.shape[idx_a] != 1 and b.shape[idx_b] == 1) :
+                    new_shape_reversed.push_back(a.shape[idx_a])
+                elif (a.shape[idx_a] == b.shape[idx_b]) :
+                    new_shape_reversed.push_back(a.shape[idx_a])
+                else :
+                    print("Error (at mul): shapes are not compatible for broadcasting")
+                
+            elif (idx_a >= 0) :  # The index is only valid for a
+                new_shape_reversed.push_back(a.shape[idx_a])
+            else :  # The index is only valid for b
+                new_shape_reversed.push_back(b.shape[idx_b])
+
+        # Reverse the shape to get the correct order
+        for i in range(len(new_shape_reversed)):
+            new_shape.push_back(new_shape_reversed[len(new_shape_reversed)-1-i])
 
         var c = Tensor(new_shape)
 
@@ -579,26 +660,38 @@ struct Module:
 
         let a_num_dims = a.num_dims
         let b_num_dims = b.num_dims
-        # if(a.shape[a_num_dims-2] != b.shape[b_num_dims-2] or a.shape[a_num_dims-1] != b.shape[b_num_dims-1]):
-        #     print("Error (at add): For Matrix addition, Matrices need to in the following shape: c[mxn] = a[mxn] + b[mxn]")
 
         # init result Tensor 
-        var new_shape = DynamicVector[Int](0)
-        
-        # regular
-        if(a_num_dims == b_num_dims):
-            for i in range(b_num_dims):
-                new_shape.push_back(a.shape[i])
+        var new_shape = DynamicVector[Int]()
+        var new_shape_reversed = DynamicVector[Int]()
 
-        # broadcast a
-        elif(b_num_dims > a_num_dims):
-            for i in range(b_num_dims):
-                new_shape.push_back(b.shape[i])
+        # Calculate the maximum number of dimensions
+        let max_dims = max(a.num_dims, b.num_dims)
 
-        # broadcast b 
-        elif(a_num_dims > b_num_dims):
-            for i in range(a_num_dims):
-                new_shape.push_back(a.shape[i])  
+        for i in range(max_dims-1, -1, -1):
+            # Calculate the corresponding index for a and b
+            let idx_a = i - (max_dims - a.num_dims)
+            let idx_b = i - (max_dims - b.num_dims)
+
+            # Check if the index is valid for both tensors
+            if (idx_a >= 0 and idx_b >= 0):
+                if (a.shape[idx_a] == 1 and b.shape[idx_b] != 1) :
+                    new_shape_reversed.push_back(b.shape[idx_b])
+                elif (a.shape[idx_a] != 1 and b.shape[idx_b] == 1) :
+                    new_shape_reversed.push_back(a.shape[idx_a])
+                elif (a.shape[idx_a] == b.shape[idx_b]) :
+                    new_shape_reversed.push_back(a.shape[idx_a])
+                else :
+                    print("Error (at mul): shapes are not compatible for broadcasting")
+                
+            elif (idx_a >= 0) :  # The index is only valid for a
+                new_shape_reversed.push_back(a.shape[idx_a])
+            else :  # The index is only valid for b
+                new_shape_reversed.push_back(b.shape[idx_b])
+
+        # Reverse the shape to get the correct order
+        for i in range(len(new_shape_reversed)):
+            new_shape.push_back(new_shape_reversed[len(new_shape_reversed)-1-i])
 
         var c = Tensor(new_shape)
 
@@ -1029,11 +1122,16 @@ struct Module:
                 let start = now()
                 mean(curr,par1)
                 self.forward_durations[9] += (now() - start)
-            if(curr.name == 'var'):
+            if(curr.name == 'variance'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 variance(curr,par1)
                 self.forward_durations[10] += (now() - start)
+            if(curr.name == 'std'):
+                let par1 = self.tensors[curr.get_parent(0)]
+                let start = now()
+                std(curr,par1)
+                self.forward_durations[11] += (now() - start)
 
             # elementwise operators
             if(curr.name == 'mul'):
@@ -1041,110 +1139,110 @@ struct Module:
                 let par2 = self.tensors[curr.get_parent(1)]
                 let start = now()
                 e_mul(curr,par1,par2)
-                self.forward_durations[11] += (now() - start)
+                self.forward_durations[12] += (now() - start)
             if(curr.name == 'add'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 let par2 = self.tensors[curr.get_parent(1)]
                 let start = now()
                 e_add(curr,par1,par2)
-                self.forward_durations[12] += (now() - start)
+                self.forward_durations[13] += (now() - start)
             if(curr.name == 'sub'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 let par2 = self.tensors[curr.get_parent(1)]
                 let start = now()
                 e_sub(curr,par1,par2)
-                self.forward_durations[13] += (now() - start)
+                self.forward_durations[14] += (now() - start)
             if(curr.name == 'div'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 let par2 = self.tensors[curr.get_parent(1)]
                 let start = now()
                 e_div(curr,par1,par2)
-                self.forward_durations[14] += (now() - start)
+                self.forward_durations[15] += (now() - start)
             if(curr.name == 'sqrt'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_sqrt(curr,par1)
-                self.forward_durations[15] += (now() - start)
+                self.forward_durations[16] += (now() - start)
             if(curr.name == 'abs'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_abs(curr,par1)
-                self.forward_durations[16] += (now() - start)
+                self.forward_durations[17] += (now() - start)
             if(curr.name == 'exp2'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
-                e_exp(curr,par1)
-                self.forward_durations[17] += (now() - start)
+                e_exp2(curr,par1)
+                self.forward_durations[18] += (now() - start)
             if(curr.name == 'exp'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_exp(curr,par1)
-                self.forward_durations[18] += (now() - start)
+                self.forward_durations[19] += (now() - start)
             if(curr.name == 'log2'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
-                e_log(curr,par1)
-                self.forward_durations[19] += (now() - start)
+                e_log2(curr,par1)
+                self.forward_durations[20] += (now() - start)
             if(curr.name == 'log'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_log(curr,par1)
-                self.forward_durations[20] += (now() - start)
+                self.forward_durations[21] += (now() - start)
             if(curr.name == 'sin'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_sin(curr,par1)
-                self.forward_durations[21] += (now() - start)
+                self.forward_durations[22] += (now() - start)
             if(curr.name == 'cos'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_cos(curr,par1)
-                self.forward_durations[22] += (now() - start)
+                self.forward_durations[23] += (now() - start)
             if(curr.name == 'tan'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_tan(curr,par1)
-                self.forward_durations[23] += (now() - start)
+                self.forward_durations[24] += (now() - start)
             if(curr.name == 'asin'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_asin(curr,par1)
-                self.forward_durations[24] += (now() - start)
+                self.forward_durations[25] += (now() - start)
             if(curr.name == 'acos'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_acos(curr,par1)
-                self.forward_durations[25] += (now() - start)
+                self.forward_durations[26] += (now() - start)
             if(curr.name == 'atan'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_atan(curr,par1)
-                self.forward_durations[26] += (now() - start)
+                self.forward_durations[27] += (now() - start)
             if(curr.name == 'sinh'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_sinh(curr,par1)
-                self.forward_durations[27] += (now() - start)
+                self.forward_durations[28] += (now() - start)
             if(curr.name == 'cosh'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_cosh(curr,par1)
-                self.forward_durations[28] += (now() - start)
+                self.forward_durations[29] += (now() - start)
             if(curr.name == 'tanh'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_tanh(curr,par1)
-                self.forward_durations[29] += (now() - start)
+                self.forward_durations[30] += (now() - start)
             if(curr.name == 'relu'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_relu(curr,par1) 
-                self.forward_durations[30] += (now() - start)
+                self.forward_durations[31] += (now() - start)
             if(curr.name == 'copy'):
                 let par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_copy(curr,par1)
-                self.forward_durations[31] += (now() - start)
+                self.forward_durations[32] += (now() - start)
 
     fn backward_order(inout self, Tensor: Tensor):
         self.backward_tape = DynamicVector[Int](0)
@@ -1234,6 +1332,11 @@ struct Module:
                 let start = now()
                 variance_grad(curr,par1)
                 self.backward_durations[10] += (now() - start)
+            if(curr.name == 'std'):
+                var par1 = self.tensors[curr.get_parent(0)]
+                let start = now()
+                std_grad(curr,par1)
+                self.backward_durations[11] += (now() - start)
 
             # elementwise operators #########################
             if(curr.name == 'mul'):
@@ -1241,110 +1344,110 @@ struct Module:
                 var par2 = self.tensors[curr.get_parent(1)]
                 let start = now()
                 e_mul_grad(curr,par1,par2)
-                self.backward_durations[11] += (now() - start)
+                self.backward_durations[12] += (now() - start)
             if(curr.name == 'add'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 var par2 = self.tensors[curr.get_parent(1)]
                 let start = now()
                 e_add_grad(curr,par1,par2)
-                self.backward_durations[12] += (now() - start)
+                self.backward_durations[13] += (now() - start)
             if(curr.name == 'sub'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 var par2 = self.tensors[curr.get_parent(1)]
                 let start = now()
                 e_sub_grad(curr,par1,par2)
-                self.backward_durations[13] += (now() - start)
+                self.backward_durations[14] += (now() - start)
             if(curr.name == 'div'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 var par2 = self.tensors[curr.get_parent(1)]
                 let start = now()
                 e_div_grad(curr,par1,par2)
-                self.backward_durations[14] += (now() - start)
+                self.backward_durations[15] += (now() - start)
             if(curr.name == 'sqrt'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_sqrt_grad(curr,par1)
-                self.backward_durations[15] += (now() - start)
+                self.backward_durations[16] += (now() - start)
             if(curr.name == 'abs'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_abs_grad(curr,par1)
-                self.backward_durations[16] += (now() - start)
+                self.backward_durations[17] += (now() - start)
             if(curr.name == 'exp2'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_exp2_grad(curr,par1)
-                self.backward_durations[17] += (now() - start)
+                self.backward_durations[18] += (now() - start)
             if(curr.name == 'exp'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_exp_grad(curr,par1)
-                self.backward_durations[18] += (now() - start)
+                self.backward_durations[19] += (now() - start)
             if(curr.name == 'log2'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_log2_grad(curr,par1)
-                self.backward_durations[19] += (now() - start)
+                self.backward_durations[20] += (now() - start)
             if(curr.name == 'log'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_log_grad(curr,par1)
-                self.backward_durations[20] += (now() - start)
+                self.backward_durations[21] += (now() - start)
             if(curr.name == 'sin'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_sin_grad(curr,par1)
-                self.backward_durations[21] += (now() - start)
+                self.backward_durations[22] += (now() - start)
             if(curr.name == 'cos'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_cos_grad(curr,par1)
-                self.backward_durations[22] += (now() - start)
+                self.backward_durations[23] += (now() - start)
             if(curr.name == 'tan'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_tan_grad(curr,par1)
-                self.backward_durations[23] += (now() - start)
+                self.backward_durations[24] += (now() - start)
             if(curr.name == 'asin'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_asin_grad(curr,par1)
-                self.backward_durations[24] += (now() - start)
+                self.backward_durations[25] += (now() - start)
             if(curr.name == 'acos'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_acos_grad(curr,par1)
-                self.backward_durations[25] += (now() - start)
+                self.backward_durations[26] += (now() - start)
             if(curr.name == 'atan'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_atan_grad(curr,par1)
-                self.backward_durations[26] += (now() - start)
+                self.backward_durations[27] += (now() - start)
             if(curr.name == 'sinh'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_sinh_grad(curr,par1)
-                self.backward_durations[27] += (now() - start)
+                self.backward_durations[28] += (now() - start)
             if(curr.name == 'cosh'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_cosh_grad(curr,par1)
-                self.backward_durations[28] += (now() - start)
+                self.backward_durations[29] += (now() - start)
             if(curr.name == 'tanh'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
-                e_asin_grad(curr,par1)
-                self.backward_durations[29] += (now() - start)
+                e_tanh_grad(curr,par1)
+                self.backward_durations[30] += (now() - start)
             if(curr.name == 'relu'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_relu_grad(curr,par1)
-                self.backward_durations[30] += (now() - start)
+                self.backward_durations[31] += (now() - start)
             if(curr.name == 'copy'):
                 var par1 = self.tensors[curr.get_parent(0)]
                 let start = now()
                 e_copy_grad(curr,par1)
-                self.backward_durations[31] += (now() - start)
+                self.backward_durations[32] += (now() - start)
 
 
     fn optimize(inout self, optType: String, lr: Float32 = 0.001, momentum: Float32 = 0.9, weight_decay: Float32 = 0.001, threshold: Float32 = Float32(100.0)):

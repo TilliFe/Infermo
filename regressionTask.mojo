@@ -20,8 +20,8 @@ struct Model:
         self.nn = Module()
 
         # define Model architecture
-        var x = linear(self.nn,self.input, num_neurons=4, add_bias=True, activation='none')
-        for i in range(8):
+        var x = linear(self.nn,self.input, num_neurons=8, add_bias=True, activation='none')
+        for i in range(6):
             x = linear(self.nn,x, num_neurons=32, add_bias=True, activation='relu')
         self.logits = linear(self.nn,x,1,True,'none')
         self.loss = self.nn.mse(self.true_vals,self.logits)
@@ -62,7 +62,7 @@ struct DataGenerator:
         for i in range(self.size):
             let x_rand = self.x.load(i) * (max - min) + min
             self.x.store(i, x_rand)
-            let res = 0.5 + 0.5*sin(20*x_rand)
+            let res = 0.5 + 0.5*sin(15*x_rand)
             self.y.store(i, res) 
 
 

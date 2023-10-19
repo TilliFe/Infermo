@@ -1,12 +1,12 @@
 # Infermo🔥
 
-### AutoDiff with Tensors in pure Mojo!
+### Tensors and dynamic Neural Networks in Mojo
 
-- Independence from external libraries.
-- Dynamic, object-oriented Model definition
-- Automatic gradient computation.
+Infermo is a Mojo library that provides two high-level features:
+- Tensor computation
+- Deep neural networks built on a tape-based autograd system
 
-**Heads up**: Mojo currently operates on CPU only. GPU support will come soon!
+Mojo currently operates on CPU only. GPU support will come soon! Infermo is currently still a Proof-of-Concept, if you encounter any bugs, feel free to create an issue or a PR. Thank you for your contribution. :)
 
 ## Available Operators
 The operators listed below are methods of the `Module` class, which orchestrates both forward and backward computations. Each operator accepts one or two `Tensor` objects as input.
@@ -20,8 +20,9 @@ The operators listed below are methods of the `Module` class, which orchestrates
 - **ce**: Computes cross entropy loss, often used for classification problems.
 - **reshape**: Returns a tensor with the same data and number of elements as input, but with the specified shape.
 - **transpose**: Returns a tensor that is a transposed version of input. The given dimensions are swapped.
-- **mean**: Computes the mean value for each channel of the input tensor in the spatial dimensions. (TODO)
-- **variance**: Computes the variance value for each channel of the input tensor in the spatial dimensions. (TODO)
+- **mean**: Computes the mean value along a list of dimensions. (TODO: backward)
+- **variance**: Computes the variance value along a list of dimensions. (TODO: backward)
+- **std**: Computes the standard deviation along a list of dimensions. (TODO: backward)
 - **mul**: Performs element-wise multiplication of two tensors.
 - **add**: Performs element-wise addition of two tensors.
 - **sub**: Performs element-wise subtraction of two tensors.
@@ -185,7 +186,7 @@ fn main():
 
 ## Usage
 
-Make sure you have installed and [configured mojo on your environment](https://docs.modular.com/mojo/manual/get-started/index.html)
+Make sure you have installed and [configured the latest version of mojo on your environment](https://docs.modular.com/mojo/manual/get-started/index.html)
 
 
 Clone the repository

@@ -326,243 +326,592 @@ fn mean_grad(b: Tensor, inout a: Tensor):
 fn variance_grad(b: Tensor, inout a: Tensor): 
     pass
 
+@always_inline
+fn std_grad(b: Tensor, inout a: Tensor): 
+    pass
+
 
 # elementwise operators #####################################################################################################
 
-@always_inline        
+# @always_inline        
+# fn e_mul_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
+
+#     # regular
+#     if(a.num_dims == b.num_dims):
+#         if(a.requires_grad):
+#             @parameter
+#             fn v_mul_gr_1[nelts: Int](i: Int):
+#                 a.grad.simd_store[nelts](
+#                     i, a.grad.simd_load[nelts](i) + b.data.simd_load[nelts](i) * c.grad.simd_load[nelts](i)
+#                 )
+#             vectorize[nelts, v_mul_gr_1](a.cap)
+#         if(b.requires_grad):
+#             @parameter
+#             fn v_mul_gr_2[nelts: Int](i: Int):
+#                 b.grad.simd_store[nelts](
+#                     i, b.grad.simd_load[nelts](i) + a.data.simd_load[nelts](i) * c.grad.simd_load[nelts](i)
+#                 )
+#             vectorize[nelts, v_mul_gr_2](b.cap)
+
+#     # consider broadcasting
+#     else:
+#         var offset_a: Int = 0
+#         var offset_b: Int = 0
+#         var offset_c: Int = 0
+#         var ratio: Int = 0
+#         var H = 0
+
+#         if(a.num_dims > b.num_dims):
+#             H = b.cap
+#             ratio = a.cap // b.cap
+#         else:
+#             H = a.cap
+#             ratio = b.cap // a.cap
+
+#         for s in range(ratio):
+#             if(a.num_dims > b.num_dims):
+#                 offset_a = s * H
+#             else:
+#                 offset_b = s * H
+
+#             offset_c = s * H
+#             if(a.requires_grad):
+#                 @parameter
+#                 fn v_mul_a[nelts: Int](i: Int):
+#                     a.grad.simd_store[nelts](
+#                         offset_a + i, a.grad.simd_load[nelts](offset_a + i) + b.data.simd_load[nelts](offset_b + i) * c.grad.simd_load[nelts](offset_c + i)
+#                     )
+#                 vectorize[nelts, v_mul_a](H) 
+
+#             if(b.requires_grad):
+#                 @parameter
+#                 fn v_mul_b[nelts: Int](i: Int):
+#                     b.grad.simd_store[nelts](
+#                         offset_b + i, b.grad.simd_load[nelts](offset_b + i) + a.data.simd_load[nelts](offset_a + i) * c.grad.simd_load[nelts](offset_c + i)
+#                     )
+#                 vectorize[nelts, v_mul_b](H) 
+
+# e_add - recursive call for proper broadcasting
+fn recursive_mul_grad_a(c: Tensor, inout a: Tensor, inout b: Tensor, a_index: Int, b_index: Int, c_index: Int, depth: Int, borrowed a_shape: DynamicVector[Int], borrowed b_shape: DynamicVector[Int], borrowed a_strides: DynamicVector[Int], borrowed b_strides: DynamicVector[Int]):
+    
+    if(depth == len(a_shape)):
+        a.grad.store(a_index, a.grad.load(a_index) + b.data.load(b_index) * c.grad.load(c_index))
+        return
+
+    # if(a_strides[depth]*a_shape[depth] == b_strides[depth]*b_shape[depth] or depth == len(a_shape)):
+    #     if(depth == len(a_shape)):
+    #         a.grad.store(a_index, a.grad.load(a_index) + b.data.load(b_index) * c.grad.load(c_index))
+    #         return
+    #     else:
+    #         @parameter
+    #         fn v_mul_grad_a[nelts: Int](i: Int):
+    #             a.grad.simd_store[nelts](
+    #                 a_index*a_strides[depth]*a_shape[depth] + i, a.grad.load(a_index*a_strides[depth]*a_shape[depth] + i) + b.data.load(b_index*b_strides[depth]*b_shape[depth] + i) *  c.grad.load(c_index*c.strides[depth]*c.shape[depth] + i)
+    #             )
+    #         vectorize[nelts, v_mul_grad_a](c.strides[depth]*c.shape[depth])
+    #         return
+
+    if(a_shape[depth] != 1 and b_shape[depth] == 1):
+        for s in range(a_shape[depth]):
+            recursive_mul_grad_a(c,a,b,a_shape[depth]*a_index + s, b_shape[depth]*b_index,a_shape[depth]*a_index + s, depth+1, a_shape, b_shape, a_strides, b_strides)
+    elif(a_shape[depth] == 1 and b_shape[depth] != 1):
+        for s in range(b_shape[depth]):
+            recursive_mul_grad_a(c,a,b,a_shape[depth]*a_index, b_shape[depth]*b_index + s, b_shape[depth]*b_index + s,depth+1, a_shape, b_shape, a_strides, b_strides)
+    else:
+        for s in range(a_shape[depth]):
+            recursive_mul_grad_a(c,a,b,a_shape[depth]*a_index + s, b_shape[depth]*b_index + s, a_shape[depth]*a_index + s,depth+1, a_shape, b_shape, a_strides, b_strides)
+
+
+fn recursive_mul_grad_b(c: Tensor, inout a: Tensor, inout b: Tensor, a_index: Int, b_index: Int, c_index: Int, depth: Int, borrowed a_shape: DynamicVector[Int], borrowed b_shape: DynamicVector[Int], borrowed a_strides: DynamicVector[Int], borrowed b_strides: DynamicVector[Int]):
+
+    if(depth == len(a_shape)):
+        b.grad.store(b_index, b.grad.load(b_index) + a.data.load(a_index) *  c.grad.load(c_index))
+        return
+        
+    # if(a_strides[depth]*a_shape[depth] == b_strides[depth]*b_shape[depth] or depth == len(a_shape)):
+    #     if(depth == len(a_shape)):
+    #         b.grad.store(b_index, b.grad.load(b_index) + a.data.load(a_index) *  c.grad.load(c_index))
+    #         return
+    #     else:
+    #         @parameter
+    #         fn v_mul_grad_b[nelts: Int](i: Int):
+    #             b.grad.simd_store[nelts](
+    #                 b_index*a_strides[depth]*b_shape[depth] + i, b.grad.load(b_index*b_strides[depth]*b_shape[depth] + i) + a.data.load(a_index*a_strides[depth]*a_shape[depth] + i) * c.grad.load(c_index*c.strides[depth]*c.shape[depth] + i)
+    #             )
+    #         vectorize[nelts, v_mul_grad_b](c.strides[depth]*c.shape[depth])
+    #         return
+
+    if(a_shape[depth] != 1 and b_shape[depth] == 1):
+        for s in range(a_shape[depth]):
+            recursive_mul_grad_b(c,a,b,a_shape[depth]*a_index + s, b_shape[depth]*b_index,a_shape[depth]*a_index + s, depth+1, a_shape, b_shape, a_strides, b_strides)
+    elif(a_shape[depth] == 1 and b_shape[depth] != 1):
+        for s in range(b_shape[depth]):
+            recursive_mul_grad_b(c,a,b,a_shape[depth]*a_index, b_shape[depth]*b_index + s, b_shape[depth]*b_index + s,depth+1, a_shape, b_shape, a_strides, b_strides)
+    else:
+        for s in range(a_shape[depth]):
+            recursive_mul_grad_b(c,a,b,a_shape[depth]*a_index + s, b_shape[depth]*b_index + s, a_shape[depth]*a_index + s,depth+1, a_shape, b_shape, a_strides, b_strides)
+
+@always_inline
 fn e_mul_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
 
-    # regular
-    if(a.num_dims == b.num_dims):
-        if(a.requires_grad):
-            @parameter
-            fn v_mul_gr_1[nelts: Int](i: Int):
-                a.grad.simd_store[nelts](
-                    i, a.grad.simd_load[nelts](i) + b.data.simd_load[nelts](i) * c.grad.simd_load[nelts](i)
-                )
-            vectorize[nelts, v_mul_gr_1](a.cap)
-        if(b.requires_grad):
-            @parameter
-            fn v_mul_gr_2[nelts: Int](i: Int):
-                b.grad.simd_store[nelts](
-                    i, b.grad.simd_load[nelts](i) + a.data.simd_load[nelts](i) * c.grad.simd_load[nelts](i)
-                )
-            vectorize[nelts, v_mul_gr_2](b.cap)
+    var a_shape = DynamicVector[Int](0)
+    var b_shape = DynamicVector[Int](0)
+    var a_strides = DynamicVector[Int](0)
+    var b_strides = DynamicVector[Int](0)
+    if(a.num_dims > b.num_dims): 
+        for i in range(a.num_dims - b.num_dims):
+            b_shape.push_back(1)
+    elif(a.num_dims < b.num_dims): 
+        for i in range(b.num_dims - a.num_dims):
+            a_shape.push_back(1)
+    for i in range(a.num_dims):
+        a_shape.push_back(a.shape.load(i))
+        b_shape.push_back(b.shape.load(i))
+    for i in range(len(a_shape)):
+        a_strides.push_back(1)
+        b_strides.push_back(1)
+    for i in range(len(a_shape)-2,-1,-1):
+        a_strides[i] = a_strides[i+1]*a_shape[i+1]
+        b_strides[i] = b_strides[i+1]*b_shape[i+1]
 
-    # consider broadcasting
+    recursive_mul_grad_a(c,a,b,0,0,0,0,a_shape,b_shape,a_strides,b_strides)
+    recursive_mul_grad_b(c,a,b,0,0,0,0,a_shape,b_shape,a_strides,b_strides)
+
+
+# @always_inline        
+# fn e_add_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
+
+#     # regular
+#     if(a.num_dims == b.num_dims):
+#         if(a.requires_grad):
+#             @parameter
+#             fn v_add_gr_1[nelts: Int](i: Int):
+#                 a.grad.simd_store[nelts](
+#                     i, a.grad.simd_load[nelts](i) + c.grad.simd_load[nelts](i)
+#                 )
+#             vectorize[nelts, v_add_gr_1](a.cap)
+#         if(b.requires_grad):
+#             @parameter
+#             fn v_add_gr_2[nelts: Int](i: Int):
+#                 b.grad.simd_store[nelts](
+#                     i, b.grad.simd_load[nelts](i) + c.grad.simd_load[nelts](i)
+#                 )
+#             vectorize[nelts, v_add_gr_2](b.cap)
+
+#     # consider broadcasting
+#     else:
+#         var offset_a: Int = 0
+#         var offset_b: Int = 0
+#         var offset_c: Int = 0
+#         var ratio: Int = 0
+#         var H = 0
+
+#         if(a.num_dims > b.num_dims):
+#             H = b.cap
+#             ratio = a.cap // b.cap
+#         else:
+#             H = a.cap
+#             ratio = b.cap // a.cap
+
+#         for s in range(ratio):
+#             if(a.num_dims > b.num_dims):
+#                 offset_a = s * H
+#             else:
+#                 offset_b = s * H
+
+#             offset_c = s * H
+#             if(a.requires_grad):
+#                 @parameter
+#                 fn v_add_a[nelts: Int](i: Int):
+#                     a.grad.simd_store[nelts](
+#                         offset_a + i, a.grad.simd_load[nelts](offset_a + i) + c.grad.simd_load[nelts](offset_c + i)
+#                     )
+#                 vectorize[nelts, v_add_a](H) 
+
+#             if(b.requires_grad):
+#                 @parameter
+#                 fn v_add_b[nelts: Int](i: Int):
+#                     b.grad.simd_store[nelts](
+#                         offset_b + i, b.grad.simd_load[nelts](offset_b + i) + c.grad.simd_load[nelts](offset_c + i)
+#                     )
+#                 vectorize[nelts, v_add_b](H) 
+
+# e_add - recursive call for proper broadcasting
+fn recursive_add_grad_a(c: Tensor, inout a: Tensor, inout b: Tensor, a_index: Int, b_index: Int, c_index: Int, depth: Int, borrowed a_shape: DynamicVector[Int], borrowed b_shape: DynamicVector[Int], borrowed a_strides: DynamicVector[Int], borrowed b_strides: DynamicVector[Int]):
+
+    if(depth == len(a_shape)):
+        a.grad.store(a_index, a.grad.load(a_index) + c.grad.load(c_index))
+        return
+        
+    # if(a_strides[depth]*a_shape[depth] == b_strides[depth]*b_shape[depth] or depth == len(a_shape)):
+    #     if(depth == len(a_shape)):
+    #         a.grad.store(a_index, a.grad.load(a_index) + c.grad.load(c_index))
+    #         return
+    #     else:
+    #         @parameter
+    #         fn v_add_grad_a[nelts: Int](i: Int):
+    #             a.grad.simd_store[nelts](
+    #                 a_index*a_strides[depth]*a_shape[depth] + i, a.grad.load(a_index*a_strides[depth]*a_shape[depth] + i) + c.grad.load(c_index*c.strides[depth]*c.shape[depth] + i)
+    #             )
+    #         vectorize[nelts, v_add_grad_a](c.strides[depth]*c.shape[depth])
+    #         return
+
+    if(a_shape[depth] != 1 and b_shape[depth] == 1):
+        for s in range(a_shape[depth]):
+            recursive_add_grad_a(c,a,b,a_shape[depth]*a_index + s, b_shape[depth]*b_index,a_shape[depth]*a_index + s, depth+1, a_shape, b_shape, a_strides, b_strides)
+    elif(a_shape[depth] == 1 and b_shape[depth] != 1):
+        for s in range(b_shape[depth]):
+            recursive_add_grad_a(c,a,b,a_shape[depth]*a_index, b_shape[depth]*b_index + s, b_shape[depth]*b_index + s,depth+1, a_shape, b_shape, a_strides, b_strides)
     else:
-        var offset_a: Int = 0
-        var offset_b: Int = 0
-        var offset_c: Int = 0
-        var ratio: Int = 0
-        var H = 0
-
-        if(a.num_dims > b.num_dims):
-            H = b.cap
-            ratio = a.cap // b.cap
-        else:
-            H = a.cap
-            ratio = b.cap // a.cap
-
-        for s in range(ratio):
-            if(a.num_dims > b.num_dims):
-                offset_a = s * H
-            else:
-                offset_b = s * H
-
-            offset_c = s * H
-            if(a.requires_grad):
-                @parameter
-                fn v_mul_a[nelts: Int](i: Int):
-                    a.grad.simd_store[nelts](
-                        offset_a + i, a.grad.simd_load[nelts](offset_a + i) + b.data.simd_load[nelts](offset_b + i) * c.grad.simd_load[nelts](offset_c + i)
-                    )
-                vectorize[nelts, v_mul_a](H) 
-
-            if(b.requires_grad):
-                @parameter
-                fn v_mul_b[nelts: Int](i: Int):
-                    b.grad.simd_store[nelts](
-                        offset_b + i, b.grad.simd_load[nelts](offset_b + i) + a.data.simd_load[nelts](offset_a + i) * c.grad.simd_load[nelts](offset_c + i)
-                    )
-                vectorize[nelts, v_mul_b](H) 
+        for s in range(a_shape[depth]):
+            recursive_add_grad_a(c,a,b,a_shape[depth]*a_index + s, b_shape[depth]*b_index + s, a_shape[depth]*a_index + s,depth+1, a_shape, b_shape, a_strides, b_strides)
 
 
-@always_inline        
+fn recursive_add_grad_b(c: Tensor, inout a: Tensor, inout b: Tensor, a_index: Int, b_index: Int, c_index: Int, depth: Int, borrowed a_shape: DynamicVector[Int], borrowed b_shape: DynamicVector[Int], borrowed a_strides: DynamicVector[Int], borrowed b_strides: DynamicVector[Int]):
+
+    if(depth == len(a_shape)):
+        b.grad.store(b_index, b.grad.load(b_index) + c.grad.load(c_index))
+        return
+
+    # if(a_strides[depth]*a_shape[depth] == b_strides[depth]*b_shape[depth] or depth == len(a_shape)):
+    #     if(depth == len(a_shape)):
+    #         b.grad.store(b_index, b.grad.load(b_index) + c.grad.load(c_index))
+    #         return
+    #     else:
+    #         @parameter
+    #         fn v_add_grad_b[nelts: Int](i: Int):
+    #             b.grad.simd_store[nelts](
+    #                 b_index*a_strides[depth]*b_shape[depth] + i, b.grad.load(b_index*b_strides[depth]*b_shape[depth] + i) + c.grad.load(c_index*c.strides[depth]*c.shape[depth] + i)
+    #             )
+    #         vectorize[nelts, v_add_grad_b](c.strides[depth]*c.shape[depth])
+    #         return
+
+    if(a_shape[depth] != 1 and b_shape[depth] == 1):
+        for s in range(a_shape[depth]):
+            recursive_add_grad_b(c,a,b,a_shape[depth]*a_index + s, b_shape[depth]*b_index,a_shape[depth]*a_index + s, depth+1, a_shape, b_shape, a_strides, b_strides)
+    elif(a_shape[depth] == 1 and b_shape[depth] != 1):
+        for s in range(b_shape[depth]):
+            recursive_add_grad_b(c,a,b,a_shape[depth]*a_index, b_shape[depth]*b_index + s, b_shape[depth]*b_index + s,depth+1, a_shape, b_shape, a_strides, b_strides)
+    else:
+        for s in range(a_shape[depth]):
+            recursive_add_grad_b(c,a,b,a_shape[depth]*a_index + s, b_shape[depth]*b_index + s, a_shape[depth]*a_index + s,depth+1, a_shape, b_shape, a_strides, b_strides)
+
+@always_inline
 fn e_add_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
 
-    # regular
-    if(a.num_dims == b.num_dims):
-        if(a.requires_grad):
-            @parameter
-            fn v_add_gr_1[nelts: Int](i: Int):
-                a.grad.simd_store[nelts](
-                    i, a.grad.simd_load[nelts](i) + c.grad.simd_load[nelts](i)
-                )
-            vectorize[nelts, v_add_gr_1](a.cap)
-        if(b.requires_grad):
-            @parameter
-            fn v_add_gr_2[nelts: Int](i: Int):
-                b.grad.simd_store[nelts](
-                    i, b.grad.simd_load[nelts](i) + c.grad.simd_load[nelts](i)
-                )
-            vectorize[nelts, v_add_gr_2](b.cap)
+    var a_shape = DynamicVector[Int](0)
+    var b_shape = DynamicVector[Int](0)
+    var a_strides = DynamicVector[Int](0)
+    var b_strides = DynamicVector[Int](0)
+    if(a.num_dims > b.num_dims): 
+        for i in range(a.num_dims - b.num_dims):
+            b_shape.push_back(1)
+    elif(a.num_dims < b.num_dims): 
+        for i in range(b.num_dims - a.num_dims):
+            a_shape.push_back(1)
+    for i in range(a.num_dims):
+        a_shape.push_back(a.shape.load(i))
+        b_shape.push_back(b.shape.load(i))
+    for i in range(len(a_shape)):
+        a_strides.push_back(1)
+        b_strides.push_back(1)
+    for i in range(len(a_shape)-2,-1,-1):
+        a_strides[i] = a_strides[i+1]*a_shape[i+1]
+        b_strides[i] = b_strides[i+1]*b_shape[i+1]
 
-    # consider broadcasting
+    recursive_add_grad_a(c,a,b,0,0,0,0,a_shape,b_shape,a_strides,b_strides)
+    recursive_add_grad_b(c,a,b,0,0,0,0,a_shape,b_shape,a_strides,b_strides)
+
+
+# @always_inline        
+# fn e_sub_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
+
+#     # regular
+#     if(a.num_dims == b.num_dims):
+#         if(a.requires_grad):
+#             @parameter
+#             fn v_sub_gr_1[nelts: Int](i: Int):
+#                 a.grad.simd_store[nelts](
+#                     i, a.grad.simd_load[nelts](i) + c.grad.simd_load[nelts](i)
+#                 )
+#             vectorize[nelts, v_sub_gr_1](a.cap)
+#         if(b.requires_grad):
+#             @parameter
+#             fn v_sub_gr_2[nelts: Int](i: Int):
+#                 b.grad.simd_store[nelts](
+#                     i, b.grad.simd_load[nelts](i) - c.grad.simd_load[nelts](i)
+#                 )
+#             vectorize[nelts, v_sub_gr_2](b.cap)
+
+#     # consider broadcasting
+#     else:
+#         var offset_a: Int = 0
+#         var offset_b: Int = 0
+#         var offset_c: Int = 0
+#         var ratio: Int = 0
+#         var H = 0
+
+#         if(a.num_dims > b.num_dims):
+#             H = b.cap
+#             ratio = a.cap // b.cap
+#         else:
+#             H = a.cap
+#             ratio = b.cap // a.cap
+
+#         for s in range(ratio):
+#             if(a.num_dims > b.num_dims):
+#                 offset_a = s * H
+#             else:
+#                 offset_b = s * H
+
+#             offset_c = s * H
+#             if(a.requires_grad):
+#                 @parameter
+#                 fn v_sub_a[nelts: Int](i: Int):
+#                     a.grad.simd_store[nelts](
+#                         offset_a + i, a.grad.simd_load[nelts](offset_a + i) + c.grad.simd_load[nelts](offset_c + i)
+#                     )
+#                 vectorize[nelts, v_sub_a](H) 
+
+#             if(b.requires_grad):
+#                 @parameter
+#                 fn v_sub_b[nelts: Int](i: Int):
+#                     b.grad.simd_store[nelts](
+#                         offset_b + i, b.grad.simd_load[nelts](offset_b + i) - c.grad.simd_load[nelts](offset_c + i)
+#                     )
+#                 vectorize[nelts, v_sub_b](H) 
+
+
+# e_add - recursive call for proper broadcasting
+fn recursive_sub_grad_a(c: Tensor, inout a: Tensor, inout b: Tensor, a_index: Int, b_index: Int, c_index: Int, depth: Int, borrowed a_shape: DynamicVector[Int], borrowed b_shape: DynamicVector[Int], borrowed a_strides: DynamicVector[Int], borrowed b_strides: DynamicVector[Int]):
+
+    if(depth == len(a_shape)):
+        a.grad.store(a_index, a.grad.load(a_index) + c.grad.load(c_index))
+        return
+
+    # if(a_strides[depth]*a_shape[depth] == b_strides[depth]*b_shape[depth] or depth == len(a_shape)):
+    #     if(depth == len(a_shape)):
+    #         a.grad.store(a_index, a.grad.load(a_index) + c.grad.load(c_index))
+    #         return
+    #     else:
+    #         @parameter
+    #         fn v_sub_grad_a[nelts: Int](i: Int):
+    #             a.grad.simd_store[nelts](
+    #                 a_index*a_strides[depth]*a_shape[depth] + i, a.grad.load(a_index*a_strides[depth]*a_shape[depth] + i) + c.grad.load(c_index*c.strides[depth]*c.shape[depth] + i)
+    #             )
+    #         vectorize[nelts, v_sub_grad_a](c.strides[depth]*c.shape[depth])
+    #         return
+
+    if(a_shape[depth] != 1 and b_shape[depth] == 1):
+        for s in range(a_shape[depth]):
+            recursive_sub_grad_a(c,a,b,a_shape[depth]*a_index + s, b_shape[depth]*b_index,a_shape[depth]*a_index + s, depth+1, a_shape, b_shape, a_strides, b_strides)
+    elif(a_shape[depth] == 1 and b_shape[depth] != 1):
+        for s in range(b_shape[depth]):
+            recursive_sub_grad_a(c,a,b,a_shape[depth]*a_index, b_shape[depth]*b_index + s, b_shape[depth]*b_index + s,depth+1, a_shape, b_shape, a_strides, b_strides)
     else:
-        var offset_a: Int = 0
-        var offset_b: Int = 0
-        var offset_c: Int = 0
-        var ratio: Int = 0
-        var H = 0
-
-        if(a.num_dims > b.num_dims):
-            H = b.cap
-            ratio = a.cap // b.cap
-        else:
-            H = a.cap
-            ratio = b.cap // a.cap
-
-        for s in range(ratio):
-            if(a.num_dims > b.num_dims):
-                offset_a = s * H
-            else:
-                offset_b = s * H
-
-            offset_c = s * H
-            if(a.requires_grad):
-                @parameter
-                fn v_add_a[nelts: Int](i: Int):
-                    a.grad.simd_store[nelts](
-                        offset_a + i, a.grad.simd_load[nelts](offset_a + i) + c.grad.simd_load[nelts](offset_c + i)
-                    )
-                vectorize[nelts, v_add_a](H) 
-
-            if(b.requires_grad):
-                @parameter
-                fn v_add_b[nelts: Int](i: Int):
-                    b.grad.simd_store[nelts](
-                        offset_b + i, b.grad.simd_load[nelts](offset_b + i) + c.grad.simd_load[nelts](offset_c + i)
-                    )
-                vectorize[nelts, v_add_b](H) 
+        for s in range(a_shape[depth]):
+            recursive_sub_grad_a(c,a,b,a_shape[depth]*a_index + s, b_shape[depth]*b_index + s, a_shape[depth]*a_index + s,depth+1, a_shape, b_shape, a_strides, b_strides)
 
 
-@always_inline        
+fn recursive_sub_grad_b(c: Tensor, inout a: Tensor, inout b: Tensor, a_index: Int, b_index: Int, c_index: Int, depth: Int, borrowed a_shape: DynamicVector[Int], borrowed b_shape: DynamicVector[Int], borrowed a_strides: DynamicVector[Int], borrowed b_strides: DynamicVector[Int]):
+
+    if(depth == len(a_shape)):
+        b.grad.store(b_index, b.grad.load(b_index) - c.grad.load(c_index))
+        return
+
+    # if(a_strides[depth]*a_shape[depth] == b_strides[depth]*b_shape[depth] or depth == len(a_shape)):
+    #     if(depth == len(a_shape)):
+    #         b.grad.store(b_index, b.grad.load(b_index) - c.grad.load(c_index))
+    #         return
+    #     else:
+    #         @parameter
+    #         fn v_sub_grad_b[nelts: Int](i: Int):
+    #             b.grad.simd_store[nelts](
+    #                 b_index*a_strides[depth]*b_shape[depth] + i, b.grad.load(b_index*b_strides[depth]*b_shape[depth] + i) - c.grad.load(c_index*c.strides[depth]*c.shape[depth] + i)
+    #             )
+    #         vectorize[nelts, v_sub_grad_b](c.strides[depth]*c.shape[depth])
+    #         return
+
+    if(a_shape[depth] != 1 and b_shape[depth] == 1):
+        for s in range(a_shape[depth]):
+            recursive_sub_grad_b(c,a,b,a_shape[depth]*a_index + s, b_shape[depth]*b_index,a_shape[depth]*a_index + s, depth+1, a_shape, b_shape, a_strides, b_strides)
+    elif(a_shape[depth] == 1 and b_shape[depth] != 1):
+        for s in range(b_shape[depth]):
+            recursive_sub_grad_b(c,a,b,a_shape[depth]*a_index, b_shape[depth]*b_index + s, b_shape[depth]*b_index + s,depth+1, a_shape, b_shape, a_strides, b_strides)
+    else:
+        for s in range(a_shape[depth]):
+            recursive_sub_grad_b(c,a,b,a_shape[depth]*a_index + s, b_shape[depth]*b_index + s, a_shape[depth]*a_index + s,depth+1, a_shape, b_shape, a_strides, b_strides)
+
+@always_inline
 fn e_sub_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
 
-    # regular
-    if(a.num_dims == b.num_dims):
-        if(a.requires_grad):
-            @parameter
-            fn v_sub_gr_1[nelts: Int](i: Int):
-                a.grad.simd_store[nelts](
-                    i, a.grad.simd_load[nelts](i) + c.grad.simd_load[nelts](i)
-                )
-            vectorize[nelts, v_sub_gr_1](a.cap)
-        if(b.requires_grad):
-            @parameter
-            fn v_sub_gr_2[nelts: Int](i: Int):
-                b.grad.simd_store[nelts](
-                    i, b.grad.simd_load[nelts](i) - c.grad.simd_load[nelts](i)
-                )
-            vectorize[nelts, v_sub_gr_2](b.cap)
+    var a_shape = DynamicVector[Int](0)
+    var b_shape = DynamicVector[Int](0)
+    var a_strides = DynamicVector[Int](0)
+    var b_strides = DynamicVector[Int](0)
+    if(a.num_dims > b.num_dims): 
+        for i in range(a.num_dims - b.num_dims):
+            b_shape.push_back(1)
+    elif(a.num_dims < b.num_dims): 
+        for i in range(b.num_dims - a.num_dims):
+            a_shape.push_back(1)
+    for i in range(a.num_dims):
+        a_shape.push_back(a.shape.load(i))
+        b_shape.push_back(b.shape.load(i))
+    for i in range(len(a_shape)):
+        a_strides.push_back(1)
+        b_strides.push_back(1)
+    for i in range(len(a_shape)-2,-1,-1):
+        a_strides[i] = a_strides[i+1]*a_shape[i+1]
+        b_strides[i] = b_strides[i+1]*b_shape[i+1]
 
-    # consider broadcasting
+    recursive_sub_grad_a(c,a,b,0,0,0,0,a_shape,b_shape,a_strides,b_strides)
+    recursive_sub_grad_b(c,a,b,0,0,0,0,a_shape,b_shape,a_strides,b_strides)
+
+
+# @always_inline        
+# fn e_div_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
+
+#     # regular
+#     if(a.num_dims == b.num_dims):
+#         if(a.requires_grad):
+#             @parameter
+#             fn v_div_gr_1[nelts: Int](i: Int):
+#                 a.grad.simd_store[nelts](
+#                     i, a.grad.simd_load[nelts](i) + c.grad.simd_load[nelts](i)
+#                 )
+#             vectorize[nelts, v_div_gr_1](a.cap)
+#         if(b.requires_grad):
+#             @parameter
+#             fn v_div_gr_2[nelts: Int](i: Int):
+#                 b.grad.simd_store[nelts](
+#                     i, b.grad.simd_load[nelts](i) + c.grad.simd_load[nelts](i)
+#                 )
+#             vectorize[nelts, v_div_gr_2](b.cap)
+
+#     # consider broadcasting
+#     else:
+#         var offset_a: Int = 0
+#         var offset_b: Int = 0
+#         var offset_c: Int = 0
+#         var ratio: Int = 0
+#         var H = 0
+
+#         if(a.num_dims > b.num_dims):
+#             H = b.cap
+#             ratio = a.cap // b.cap
+#         else:
+#             H = a.cap
+#             ratio = b.cap // a.cap
+
+#         for s in range(ratio):
+#             if(a.num_dims > b.num_dims):
+#                 offset_a = s * H
+#             else:
+#                 offset_b = s * H
+
+#             offset_c = s * H
+#             if(a.requires_grad):
+#                 @parameter
+#                 fn v_div_a[nelts: Int](i: Int):
+#                     a.grad.simd_store[nelts](
+#                         offset_a + i, a.grad.simd_load[nelts](offset_a + i) + c.grad.simd_load[nelts](offset_c + i) / b.data.simd_load[nelts](offset_b + i)
+#                     )
+#                 vectorize[nelts, v_div_a](H) 
+
+#             if(b.requires_grad):
+#                 @parameter
+#                 fn v_div_b[nelts: Int](i: Int):
+#                     b.grad.simd_store[nelts](
+#                         offset_b + i, b.grad.simd_load[nelts](offset_b + i) - c.grad.simd_load[nelts](offset_c + i) * a.data.simd_load[nelts](offset_a + i) / pow(b.data.simd_load[nelts](offset_b + i),2)
+#                     )
+#                 vectorize[nelts, v_div_b](H) 
+
+# e_add - recursive call for proper broadcasting
+fn recursive_div_grad_a(c: Tensor, inout a: Tensor, inout b: Tensor, a_index: Int, b_index: Int, c_index: Int, depth: Int, borrowed a_shape: DynamicVector[Int], borrowed b_shape: DynamicVector[Int], borrowed a_strides: DynamicVector[Int], borrowed b_strides: DynamicVector[Int]):
+
+    if(depth == len(a_shape)):
+        a.grad.store(a_index, a.grad.load(a_index) + c.grad.load(c_index) / b.data.load(b_index) )
+        return
+
+    # if(a_strides[depth]*a_shape[depth] == b_strides[depth]*b_shape[depth] or depth == len(a_shape)):
+    #     if(depth == len(a_shape)):
+    #         a.grad.store(a_index, a.grad.load(a_index) + c.grad.load(c_index) / b.data.load(b_index) )
+    #         return
+    #     else:
+    #         @parameter
+    #         fn v_div_grad_a[nelts: Int](i: Int):
+    #             a.grad.simd_store[nelts](
+    #                 a_index*a_strides[depth]*a_shape[depth] + i, a.grad.load(a_index*a_strides[depth]*a_shape[depth] + i) + c.grad.load(c_index*c.strides[depth]*c.shape[depth] + i) / b.data.load(b_index*b_strides[depth]*b_shape[depth] + i)
+    #             )
+    #         vectorize[nelts, v_div_grad_a](c.strides[depth]*c.shape[depth])
+    #         return
+
+    if(a_shape[depth] != 1 and b_shape[depth] == 1):
+        for s in range(a_shape[depth]):
+            recursive_div_grad_a(c,a,b,a_shape[depth]*a_index + s, b_shape[depth]*b_index,a_shape[depth]*a_index + s, depth+1, a_shape, b_shape, a_strides, b_strides)
+    elif(a_shape[depth] == 1 and b_shape[depth] != 1):
+        for s in range(b_shape[depth]):
+            recursive_div_grad_a(c,a,b,a_shape[depth]*a_index, b_shape[depth]*b_index + s, b_shape[depth]*b_index + s,depth+1, a_shape, b_shape, a_strides, b_strides)
     else:
-        var offset_a: Int = 0
-        var offset_b: Int = 0
-        var offset_c: Int = 0
-        var ratio: Int = 0
-        var H = 0
-
-        if(a.num_dims > b.num_dims):
-            H = b.cap
-            ratio = a.cap // b.cap
-        else:
-            H = a.cap
-            ratio = b.cap // a.cap
-
-        for s in range(ratio):
-            if(a.num_dims > b.num_dims):
-                offset_a = s * H
-            else:
-                offset_b = s * H
-
-            offset_c = s * H
-            if(a.requires_grad):
-                @parameter
-                fn v_sub_a[nelts: Int](i: Int):
-                    a.grad.simd_store[nelts](
-                        offset_a + i, a.grad.simd_load[nelts](offset_a + i) + c.grad.simd_load[nelts](offset_c + i)
-                    )
-                vectorize[nelts, v_sub_a](H) 
-
-            if(b.requires_grad):
-                @parameter
-                fn v_sub_b[nelts: Int](i: Int):
-                    b.grad.simd_store[nelts](
-                        offset_b + i, b.grad.simd_load[nelts](offset_b + i) - c.grad.simd_load[nelts](offset_c + i)
-                    )
-                vectorize[nelts, v_sub_b](H) 
+        for s in range(a_shape[depth]):
+            recursive_div_grad_a(c,a,b,a_shape[depth]*a_index + s, b_shape[depth]*b_index + s, a_shape[depth]*a_index + s,depth+1, a_shape, b_shape, a_strides, b_strides)
 
 
-@always_inline        
+fn recursive_div_grad_b(c: Tensor, inout a: Tensor, inout b: Tensor, a_index: Int, b_index: Int, c_index: Int, depth: Int, borrowed a_shape: DynamicVector[Int], borrowed b_shape: DynamicVector[Int], borrowed a_strides: DynamicVector[Int], borrowed b_strides: DynamicVector[Int]):
+
+    if(depth == len(a_shape)):
+        b.grad.store(b_index, b.grad.load(b_index) - a.data.load(a_index) * c.grad.load(c_index) / pow(b.data.load(b_index),2) )
+        return
+
+    # if(a_strides[depth]*a_shape[depth] == b_strides[depth]*b_shape[depth] or depth == len(a_shape)):
+    #     if(depth == len(a_shape)):
+    #         b.grad.store(b_index, b.grad.load(b_index) - a.data.load(a_index) * c.grad.load(c_index) / pow(b.data.load(b_index),2) )
+    #         return
+    #     else:
+    #         @parameter
+    #         fn v_div_grad_b[nelts: Int](i: Int):
+    #             b.grad.simd_store[nelts](
+    #                 b_index*a_strides[depth]*b_shape[depth] + i, b.grad.load(b_index*b_strides[depth]*b_shape[depth] + i) - a.data.load(a_index*a_strides[depth]*a_shape[depth] + i) * c.grad.load(c_index*c.strides[depth]*c.shape[depth] + i) / pow(b.data.load(b_index*b_strides[depth]*b_shape[depth] + i),2) 
+    #             )
+    #         vectorize[nelts, v_div_grad_b](c.strides[depth]*c.shape[depth])
+    #         return
+
+    if(a_shape[depth] != 1 and b_shape[depth] == 1):
+        for s in range(a_shape[depth]):
+            recursive_div_grad_b(c,a,b,a_shape[depth]*a_index + s, b_shape[depth]*b_index,a_shape[depth]*a_index + s, depth+1, a_shape, b_shape, a_strides, b_strides)
+    elif(a_shape[depth] == 1 and b_shape[depth] != 1):
+        for s in range(b_shape[depth]):
+            recursive_div_grad_b(c,a,b,a_shape[depth]*a_index, b_shape[depth]*b_index + s, b_shape[depth]*b_index + s,depth+1, a_shape, b_shape, a_strides, b_strides)
+    else:
+        for s in range(a_shape[depth]):
+            recursive_div_grad_b(c,a,b,a_shape[depth]*a_index + s, b_shape[depth]*b_index + s, a_shape[depth]*a_index + s,depth+1, a_shape, b_shape, a_strides, b_strides)
+
+@always_inline
 fn e_div_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
 
-    # regular
-    if(a.num_dims == b.num_dims):
-        if(a.requires_grad):
-            @parameter
-            fn v_div_gr_1[nelts: Int](i: Int):
-                a.grad.simd_store[nelts](
-                    i, a.grad.simd_load[nelts](i) + c.grad.simd_load[nelts](i)
-                )
-            vectorize[nelts, v_div_gr_1](a.cap)
-        if(b.requires_grad):
-            @parameter
-            fn v_div_gr_2[nelts: Int](i: Int):
-                b.grad.simd_store[nelts](
-                    i, b.grad.simd_load[nelts](i) + c.grad.simd_load[nelts](i)
-                )
-            vectorize[nelts, v_div_gr_2](b.cap)
+    var a_shape = DynamicVector[Int](0)
+    var b_shape = DynamicVector[Int](0)
+    var a_strides = DynamicVector[Int](0)
+    var b_strides = DynamicVector[Int](0)
+    if(a.num_dims > b.num_dims): 
+        for i in range(a.num_dims - b.num_dims):
+            b_shape.push_back(1)
+    elif(a.num_dims < b.num_dims): 
+        for i in range(b.num_dims - a.num_dims):
+            a_shape.push_back(1)
+    for i in range(a.num_dims):
+        a_shape.push_back(a.shape.load(i))
+        b_shape.push_back(b.shape.load(i))
+    for i in range(len(a_shape)):
+        a_strides.push_back(1)
+        b_strides.push_back(1)
+    for i in range(len(a_shape)-2,-1,-1):
+        a_strides[i] = a_strides[i+1]*a_shape[i+1]
+        b_strides[i] = b_strides[i+1]*b_shape[i+1]
 
-    # consider broadcasting
-    else:
-        var offset_a: Int = 0
-        var offset_b: Int = 0
-        var offset_c: Int = 0
-        var ratio: Int = 0
-        var H = 0
-
-        if(a.num_dims > b.num_dims):
-            H = b.cap
-            ratio = a.cap // b.cap
-        else:
-            H = a.cap
-            ratio = b.cap // a.cap
-
-        for s in range(ratio):
-            if(a.num_dims > b.num_dims):
-                offset_a = s * H
-            else:
-                offset_b = s * H
-
-            offset_c = s * H
-            if(a.requires_grad):
-                @parameter
-                fn v_div_a[nelts: Int](i: Int):
-                    a.grad.simd_store[nelts](
-                        offset_a + i, a.grad.simd_load[nelts](offset_a + i) + c.grad.simd_load[nelts](offset_c + i) / b.data.simd_load[nelts](offset_b + i)
-                    )
-                vectorize[nelts, v_div_a](H) 
-
-            if(b.requires_grad):
-                @parameter
-                fn v_div_b[nelts: Int](i: Int):
-                    b.grad.simd_store[nelts](
-                        offset_b + i, b.grad.simd_load[nelts](offset_b + i) - c.grad.simd_load[nelts](offset_c + i) * a.data.simd_load[nelts](offset_a + i) / pow(b.data.simd_load[nelts](offset_b + i),2)
-                    )
-                vectorize[nelts, v_div_b](H) 
+    recursive_div_grad_a(c,a,b,0,0,0,0,a_shape,b_shape,a_strides,b_strides)
+    recursive_div_grad_b(c,a,b,0,0,0,0,a_shape,b_shape,a_strides,b_strides)
 
 
 @always_inline
@@ -581,7 +930,7 @@ fn e_abs_grad(b: Tensor, inout a: Tensor):
     fn v_abs_bw[nelts: Int](i: Int):
         let zeros = SIMD[DType.float32,nelts]()
         a.grad.simd_store[nelts](
-            i, a.grad.simd_load[nelts](i) + (Float32(2.0) * (a.data.simd_load[nelts](i) > zeros).cast[DType.float32]() - Float32(1.0)) * b.grad.simd_load[nelts](i)
+            i, a.grad.simd_load[nelts](i) + (Float32(2.0) * (a.data.simd_load[nelts](i) >= zeros).cast[DType.float32]() - Float32(1.0)) * b.grad.simd_load[nelts](i)
         )
     vectorize[nelts, v_abs_bw](a.cap)
 
@@ -591,7 +940,7 @@ fn e_exp2_grad(b: Tensor, inout a: Tensor):
     @parameter
     fn v_exp2_grad[nelts: Int](i: Int):
         a.grad.simd_store[nelts](
-            i, a.grad.simd_load[nelts](i) + b.grad.simd_load[nelts](i) * b.data.simd_load[nelts](i) / log(Float32(2.0))
+            i, a.grad.simd_load[nelts](i) + b.grad.simd_load[nelts](i) * b.data.simd_load[nelts](i) * log(Float32(2.0))
         )
     vectorize[nelts, v_exp2_grad](a.cap)
 
@@ -653,7 +1002,6 @@ fn e_tan_grad(b: Tensor, inout a: Tensor):
         )
     vectorize[nelts, v_tan_bw](a.cap)
 
-
 @always_inline
 fn e_asin_grad(b: Tensor, inout a: Tensor):
     @parameter
@@ -708,7 +1056,7 @@ fn e_tanh_grad(b: Tensor, inout a: Tensor):
     @parameter
     fn v_tanh_bw[nelts: Int](i: Int):
         a.grad.simd_store[nelts](
-            i, a.grad.simd_load[nelts](i) + b.grad.simd_load[nelts](i) / cosh(a.data.simd_load[nelts](i))
+            i, a.grad.simd_load[nelts](i) + b.grad.simd_load[nelts](i) * (1.0 - pow(b.data.simd_load[nelts](i),2))
         )
     vectorize[nelts, v_tanh_bw](a.cap)
 

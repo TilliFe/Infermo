@@ -19,3 +19,11 @@ fn shape(*_shape: Int) -> DynamicVector[Int]:
     for i in range(len):
         shape.push_back(v[i])
     return shape
+
+fn list(*_shape: Int) -> DynamicVector[Int]:
+    let v = VariadicList[Int](_shape)
+    let len = len(v)
+    var shape = DynamicVector[Int](0)
+    for i in range(len):
+        shape.push_back(v[i])
+    return shape
