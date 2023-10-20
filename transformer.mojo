@@ -1,4 +1,4 @@
-from dv import Tensor,Module,shape,transformer_block,embed,unembed,max,accuracy
+from infermo import Tensor,Module,shape,transformer_block,embed,unembed,max,accuracy
 from random import random_float64, seed
 from memory import memset_zero
 from math import sqrt

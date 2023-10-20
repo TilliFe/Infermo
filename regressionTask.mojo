@@ -1,4 +1,4 @@
-from dv import Tensor,Module,shape,linear
+from infermo import Tensor,Module,shape,linear
 from math import sin
 from random import rand, seed
 
@@ -71,7 +71,7 @@ fn main() raises:
 
     let dataset = DataGenerator(32)
     var model = Model()
-    let num_epochs = 100000
+    let num_epochs = 10000
 
     var loss_sum: Float32 = 0
     let every = 1000

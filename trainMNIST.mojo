@@ -1,4 +1,4 @@
-from dv import Module, Tensor, shape, linear, max, accuracy, DataLoader
+from infermo import Module, Tensor, shape, linear, max, accuracy, DataLoader
 
 ######################## basic mlp for handwritten digit recognition (MNIST) ################################################
 
@@ -49,20 +49,20 @@ struct Model:
 
     @always_inline
     fn step(inout self):
-        self.nn.optimize('sgd_momentum', lr = 0.01, momentum = 0.9, weight_decay=0.01)
+        self.nn.optimize('sgd_momentum', lr = 0.003, momentum = 0.9, weight_decay=0.01)
 
 
 # train the Model
 fn main() raises:
 
     # init
-    var dl = DataLoader('./dv/datasets/mnist.txt')
+    var dl = DataLoader('./infermo/datasets/mnist.txt')
     var model = Model()
 
-    let num_epochs = 1000
+    let num_epochs = 10000
     var loss_sum: Float32 = 0
     var avg_acc: Float32 = 0
-    let every = 100
+    let every = 500
 
     for epoch in range(1,num_epochs+1):
         # load a batch of images into the Model

@@ -81,8 +81,6 @@ struct Module:
         unroll[32, loop]()
 
 
-
-
     # some basic methods ################################################################
     @always_inline
     fn add_to_graph(inout self, inout a: Tensor):
@@ -132,8 +130,14 @@ struct Module:
         
         # regular
         if(a_num_dims == b_num_dims):
-            for i in range(b_num_dims-1):
-                new_shape.push_back(a.shape[i])
+            for i in range(b_num_dims-2):
+                if(a.shape[i] == 1 and b.shape[i] != 1):
+                    new_shape.push_back(b.shape[i])
+                elif(a.shape[i] != 1 and b.shape[i] == 1):
+                    new_shape.push_back(a.shape[i])
+                else:
+                    new_shape.push_back(a.shape[i])
+            new_shape.push_back(a.shape[a_num_dims-2])
             new_shape.push_back(b.shape[b_num_dims-1])
 
         # broadcast a
@@ -505,7 +509,7 @@ struct Module:
             if (idx_a >= 0 and idx_b >= 0):
                 if (a.shape[idx_a] == 1 and b.shape[idx_b] != 1) :
                     new_shape_reversed.push_back(b.shape[idx_b])
-                elif (a.shape[idx_a] != 1 and b.shape[idx_b] == 1) :
+                elif (a.shape[idx_a] != 1 and b.shape[idx_b] == 1):
                     new_shape_reversed.push_back(a.shape[idx_a])
                 elif (a.shape[idx_a] == b.shape[idx_b]) :
                     new_shape_reversed.push_back(a.shape[idx_a])

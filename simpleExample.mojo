@@ -1,4 +1,4 @@
-from dv import Module, Tensor, shape
+from infermo import Module, Tensor, shape
 
 ################### Random example: compute Gradients automatically ##############################################
 fn main():

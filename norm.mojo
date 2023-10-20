@@ -1,4 +1,4 @@
-from dv import *
+from infermo import *
 
 # test function for normalizing along a given dimensions
 fn main():
