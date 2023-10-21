@@ -9,17 +9,17 @@ Infermo is a Mojo library that provides two high-level features:
 Mojo currently operates on CPU only. GPU support will come soon! Infermo is currently still a Proof-of-Concept, if you encounter any bugs, feel free to create an issue or a PR. Thank you for your contribution. :)
 
 ## Available Operators
-The operators listed below are methods of the `Module` class, which orchestrates both forward and backward computations. Each operator accepts one or two `Tensor` objects as input.
+The operators listed below are methods of the `Module` class, which orchestrates both forward and backward computations. Each operator accepts one or two `Tensor` objects as input. All binary operators accept differently shaped Tensors via broadcasting.
 
 - **matmul**: Performs matrix multiplication of two tensors.
 - **conv_2d**: Applies a 2D convolution over an input signal composed of several input planes.
 - **max_pool_2d**: Applies a 2D max pooling over an input signal composed of several input planes.
-- **sum**: Returns the sum of all elements in the input tensor.
-- **softmax**: Applies a softmax function. It is applied to all slices along dim, and will re-scale them so that the element-wise sum is 1.
+- **sum**: Computes the sum of all elements in the input tensor.
+- **softmax**: Applies a softmax function along the last dimension.
 - **mse**: Calculates the mean squared error between each element in the input x and target.
 - **ce**: Computes cross entropy loss, often used for classification problems.
 - **reshape**: Returns a tensor with the same data and number of elements as input, but with the specified shape.
-- **transpose**: Returns a tensor that is a transposed version of input. The given dimensions are swapped.
+- **transpose**: Transposes a Tensor along the last two dimensions.
 - **mean**: Computes the mean value along a list of dimensions. (TODO: backward)
 - **variance**: Computes the variance value along a list of dimensions. (TODO: backward)
 - **std**: Computes the standard deviation along a list of dimensions. (TODO: backward)
@@ -27,25 +27,24 @@ The operators listed below are methods of the `Module` class, which orchestrates
 - **add**: Performs element-wise addition of two tensors.
 - **sub**: Performs element-wise subtraction of two tensors.
 - **div**: Performs element-wise division of two tensors.
-- **sqrt**: Returns a new tensor with the square-root of the elements of input.
+- **sqrt**: Elemtwise square root computation.
 - **abs**: Computes the absolute value of each element in input.
+- **pow**: Elementwise pow operation between two Tensors, or elemtwise raise to the power of some number.
 - **exp2**: Computes 2 raised to the power of each element in input.
 - **exp**: Computes exponential of each element in input.
 - **log2**: Computes logarithm base 2 of each element in input.
 - **log**: Computes natural logarithm ln(x) of each element in input.
-- **sin, cos, tan, asin, acos, atan, sinh, cosh, tanh**: Trigonometric functions. Each computes trigonometric function of each element in input.
-- **relu**: Applies the rectified linear unit function element-wise. It replaces all negative values in the tensor with zero.
+- **sin, cos, tan, asin, acos, atan, sinh, cosh, tanh**: Elementwise trigonometric functions. 
+- **relu**: Applies the rectified linear unit function element-wise. 
 - **copy**: Performs a deep copy of the input Tensor.
-
-**Note**: All binary operators in this library are designed to handle tensors of different `shape` through broadcasting.
 
 ## Advanced Operators
 
-- **linear**: This operator represents a dense layer of neurons. It can be used with or without the ReLU activation function, providing flexibility in network design.
+- **linear**: This operator represents a dense layer of neurons. 
 - **mlp**: Similar to the dense operator, but specifically tailored for use within a transformer block.
-- **conv2d**: Executes a convolution operation with a specified tensor, commonly used in convolutional neural networks.
-- **transformer_block, embed, unembed, pos_embed**: These are the fundamental building blocks of a Transformer model, providing the necessary operations for effective sequence transduction.
-- **DataLoader**: A utility for handling data. It reads, initializes, and loads data from a given .txt file, simplifying the data preparation process.
+- **conv2d**: Executes a convolution operation with a specified tensor and adds a bias if necessary.
+- **transformer_block, embed, unembed, pos_embed**: These are the fundamental building blocks of a Transformer model.
+- **DataLoader**: A utility for handling data. It reads, initializes, and loads data from a given .txt file. (TODO: dataset splitting, read from csv)
 
 
 ## Example Code
