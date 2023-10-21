@@ -10,11 +10,11 @@ fn main():
     for i in range(a.cap):
         a.data.store(i,Float32(i))
 
-    var b = Tensor(shape(2,2,3,4))
+    var b = Tensor(shape(2,3,4))
     for i in range(b.cap):
         b.data.store(i,0.1*Float32(i))
 
-    var c = nn.add(a,b)
+    var c = nn.pow(a,b)
     var d = nn.sum(c)
     nn.forward(d)
     nn.backward(d)

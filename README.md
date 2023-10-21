@@ -163,7 +163,7 @@ fn main():
     # init
     var nn = Module()
     var A = Tensor(shape(2,5,3))
-    var B = Tensor(shape(2,3,4))
+    var B = Tensor(shape(1,3,4))
 
     # specify tensor entries
     A.fill(2)
@@ -201,14 +201,8 @@ Navigate to the cloned repository
 cd Infermo
 ```
 
-Once this is set up, you can directly try out the MNIST training setup with the following command
+Once this is set up, you can directly try out one of the tests e.g. the MNIST training setup with the following command
 
 ```
-mojo trainMNIST.mojo
-```
-
-or the regression task via
-
-```
-mojo regressionTask.mojo
+mojo train_MNIST.mojo
 ```

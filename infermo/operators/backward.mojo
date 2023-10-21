@@ -5,7 +5,7 @@ from random import rand
 from runtime.llcl import Runtime
 from algorithm import vectorize, parallelize
 from random import rand, random_si64, seed, randint
-from math import pow, max, min, sqrt, abs, exp2, exp, log2, log, cos, sin, tan, asin, acos, atan, cosh, sinh, tanh
+from math import max, min, sqrt, abs, pow, exp2, exp, log2, log, cos, sin, tan, asin, acos, atan, cosh, sinh, tanh
 from sys.param_env import env_get_int
 
 from ..graph.tensor import Tensor
@@ -595,6 +595,56 @@ fn e_abs_grad(b: Tensor, inout a: Tensor):
         )
     vectorize[nelts, v_abs_bw](a.cap)
 
+
+# pow(a,b)
+@parameter
+fn base_case_pow_bw(depth: Int, a: Tensor, b: Tensor) -> Bool:
+    return strides_a(depth,a,b)*shape_a(depth,a,b) == strides_b(depth,a,b)*shape_b(depth,a,b)
+
+@parameter
+fn kernel_pow_bw_a(c: Tensor, inout a: Tensor, inout b: Tensor, a_index: Int, b_index: Int, c_index: Int, depth: Int) -> None:
+
+    let offset_a = a_index*shape_a(depth,a,b)*strides_a(depth,a,b)
+    let offset_b = b_index*shape_b(depth,a,b)*strides_b(depth,a,b)
+    let c_rest = c.shape[depth]*c.strides[depth]
+    let offset_c = c_index*c_rest
+
+    @parameter
+    fn v_pow_bw_a[nelts: Int](i: Int):
+        a.grad.simd_store[nelts](
+            offset_a + i, a.grad.simd_load[nelts](offset_a + i) + b.data.simd_load[nelts](offset_b + i) * pow(a.data.simd_load[nelts](offset_a + i),b.data.simd_load[nelts](offset_b + i) - Float32(1.0)) * c.grad.simd_load[nelts](offset_c + i)
+        )
+    vectorize[nelts, v_pow_bw_a](c_rest)
+
+@parameter
+fn kernel_pow_bw_b(c: Tensor, inout a: Tensor, inout b: Tensor, a_index: Int, b_index: Int, c_index: Int, depth: Int) -> None:
+
+    let offset_a = a_index*shape_a(depth,a,b)*strides_a(depth,a,b)
+    let offset_b = b_index*shape_b(depth,a,b)*strides_b(depth,a,b)
+    let c_rest = c.shape[depth]*c.strides[depth]
+    let offset_c = c_index*c_rest
+
+    @parameter
+    fn v_pow_bw_b[nelts: Int](i: Int):
+        b.grad.simd_store[nelts](
+            offset_b + i, b.grad.simd_load[nelts](offset_b + i) + c.data.simd_load[nelts](offset_c + i) * log(a.data.simd_load[nelts](offset_a + i)) * c.grad.simd_load[nelts](offset_c + i)
+        )
+    vectorize[nelts, v_pow_bw_b](c_rest)
+
+@always_inline
+fn e_pow_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
+    recursive_broadcast_bw[kernel_pow_bw_a, base_case_pow_bw](c,a,b)
+    recursive_broadcast_bw[kernel_pow_bw_b, base_case_pow_bw](c,a,b)
+
+
+# pow(a,<some_number>)
+fn e_pow_all_grad(b: Tensor, inout a: Tensor): 
+    let e = b.other_params.load(0)
+    @parameter
+    fn v_pow_all_bw[nelts: Int](i: Int):
+        let temp = e * pow(a.data.simd_load[nelts](i),e-1) * b.grad.simd_load[nelts](i)
+        a.grad.simd_store[nelts](i, temp)
+    vectorize[nelts, v_pow_all_bw](a.cap)
 
 @always_inline
 fn e_exp2_grad(b: Tensor, inout a: Tensor): 

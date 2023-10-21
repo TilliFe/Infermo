@@ -4,7 +4,7 @@ from infermo import Module, Tensor, shape
 fn main():
     # init
     var nn = Module()
-    var a = Tensor(shape(2,5,3))
+    var a = Tensor(shape(1,5,3))
     var b = Tensor(shape(2,3,4))
 
     # specify tensor entries

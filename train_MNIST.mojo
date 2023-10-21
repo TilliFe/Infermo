@@ -59,7 +59,7 @@ fn main() raises:
     var dl = DataLoader('./infermo/datasets/mnist.txt')
     var model = Model()
 
-    let num_epochs = 10000
+    let num_epochs = 100
     var loss_sum: Float32 = 0
     var avg_acc: Float32 = 0
     let every = 500
