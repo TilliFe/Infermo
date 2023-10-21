@@ -15,103 +15,115 @@ alias nelts = simdwidthof[DType.float32]()
 alias workers = env_get_int["WORKERS", 0]()
 
 
-# Non-elementwise operators ####################################################
+################################################################################################################################
 
-# e_mul - recursive call for proper broadcasting
-fn recursive_matmul(inout c: Tensor, borrowed a: Tensor, borrowed b: Tensor, a_index: Int, b_index: Int, c_index: Int, depth: Int, borrowed a_shape: DynamicVector[Int], borrowed b_shape: DynamicVector[Int], borrowed a_strides: DynamicVector[Int], borrowed b_strides: DynamicVector[Int]):
+# broadcasting helpers #########################################################################################################
 
-    # base case
-    if(depth == len(a_shape)-2):
+fn shape_a(depth: Int, a: Tensor, b: Tensor) -> Int:
+    let diff = max(b.num_dims - a.num_dims,0)
+    if(depth < diff):
+        return 1
+    return a.shape[depth - diff]
 
-        var a_matrix_size = a.shape[a.num_dims-2] * a.shape[a.num_dims-1]
-        var b_matrix_size = b.shape[b.num_dims-2] * b.shape[b.num_dims-1]
-        var c_matrix_size = c.shape[c.num_dims-2] * c.shape[c.num_dims-1]
+fn shape_b(depth: Int, a: Tensor, b: Tensor) -> Int:
+    let diff = max(a.num_dims - b.num_dims,0)
+    if(depth < diff):
+        return 1
+    return b.shape[depth - diff]
 
-        let M = c.shape[c.num_dims-2]
-        let K = a.shape[a.num_dims-1]
-        let N = c.shape[c.num_dims-1] 
+fn strides_a(depth: Int, a: Tensor, b: Tensor) -> Int:
+    let diff = max(b.num_dims - a.num_dims,0)
+    if(depth < diff):
+        return a.strides[0]
+    return a.strides[depth - diff]
 
-        @parameter
-        fn calc_row_fw(m: Int):
-            for k in range(K):
-                @parameter
-                fn dot_fw[nelts: Int](n: Int):
-                    c.data.simd_store[nelts](c_index*c_matrix_size + m*N+n, c.data.simd_load[nelts](c_index*c_matrix_size + m*N+n) + a.data.load(a_index*a_matrix_size + m*K+k) * b.data.simd_load[nelts](b_index*b_matrix_size + k*N+n))
-                vectorize[nelts, dot_fw](N)
-        parallelize[calc_row_fw](M, workers if workers > 0 else M) 
+fn strides_b(depth: Int, a: Tensor, b: Tensor) -> Int:
+    let diff = max(a.num_dims - b.num_dims,0)
+    if(depth < diff):
+        return b.strides[0]
+    return b.strides[depth - diff]
+
+
+# recursive broadcast
+fn recursive_broadcast_fw[kernel: fn(inout c: Tensor, a: Tensor, b: Tensor, a_index: Int, b_index: Int, c_index: Int, depth: Int ) -> None, base_case: fn(depth: Int, a: Tensor, b: Tensor) -> Bool](
+    inout c: Tensor, 
+    a: Tensor, 
+    b: Tensor, 
+    a_index: Int=0, 
+    b_index: Int=0, 
+    c_index: Int=0, 
+    depth: Int=0
+):
+
+    # base case - launch kernel
+    if(base_case(depth,a,b)):
+        kernel(c,a,b,a_index,b_index,c_index,depth)
         return
 
-    if(a_shape[depth] != 1 and b_shape[depth] == 1):
-        for s in range(a_shape[depth]):
-            recursive_matmul(c,a,b,a_shape[depth]*a_index + s, b_shape[depth]*b_index,a_shape[depth]*a_index + s, depth+1, a_shape, b_shape, a_strides, b_strides)
-    elif(a_shape[depth] == 1 and b_shape[depth] != 1):
-        for s in range(b_shape[depth]):
-            recursive_matmul(c,a,b,a_shape[depth]*a_index, b_shape[depth]*b_index + s, b_shape[depth]*b_index + s,depth+1, a_shape, b_shape, a_strides, b_strides)
+    # go into depth
+    let a_shape = shape_a(depth,a,b)
+    let b_shape = shape_b(depth,a,b)
+    let c_shape = c.shape[depth]
+    if(a_shape != 1 and b_shape == 1):
+        for s in range(a_shape):
+            recursive_broadcast_fw[kernel,base_case](
+                c,a,b,
+                a_shape*a_index + s, 
+                b_shape*b_index,
+                c_shape*c_index + s, 
+                depth+1
+            )
+    elif(a_shape == 1 and b_shape != 1):
+        for s in range(b_shape):
+            recursive_broadcast_fw[kernel,base_case](
+                c,a,b,
+                a_shape*a_index, 
+                b_shape*b_index + s, 
+                c_shape*c_index + s,
+                depth+1
+            )
     else:
-        for s in range(a_shape[depth]):
-            recursive_matmul(c,a,b,a_shape[depth]*a_index + s, b_shape[depth]*b_index + s, c.shape[depth]*c_index + s,depth+1, a_shape, b_shape, a_strides, b_strides)
+        for s in range(a_shape):
+            recursive_broadcast_fw[kernel,base_case](
+                c,a,b,
+                a_shape*a_index + s, 
+                b_shape*b_index + s, 
+                c_shape*c_index + s,
+                depth+1
+            )
+
+
+# Non-elementwise operators ####################################################################################################
+
+@parameter
+fn base_case_matmul_fw(depth: Int, a: Tensor, b: Tensor) -> Bool:
+    return depth == max(a.num_dims,b.num_dims)-2
+
+@parameter
+fn kernel_matmul_fw(inout c: Tensor, a: Tensor, b: Tensor, a_index: Int, b_index: Int, c_index: Int, depth: Int) -> None:
+ 
+    let offset_a = a_index * a.shape[a.num_dims-2] * a.shape[a.num_dims-1]
+    let offset_b = b_index * b.shape[b.num_dims-2] * b.shape[b.num_dims-1]
+    let offset_c = c_index * c.shape[c.num_dims-2] * c.shape[c.num_dims-1] 
+
+    let M = a.shape[a.num_dims-2]
+    let K = b.shape[b.num_dims-2]
+    let N = b.shape[b.num_dims-1]
+
+    @parameter
+    fn calc_row_fw(m: Int):
+        for k in range(K):
+            @parameter
+            fn dot_fw[nelts: Int](n: Int):
+                c.data.simd_store[nelts](
+                    offset_c + m*N+n, 
+                    c.data.simd_load[nelts](offset_c + m*N+n) + a.data.load(offset_a + m*K+k) * b.data.simd_load[nelts](offset_b + k*N+n))
+            vectorize[nelts, dot_fw](N)
+    parallelize[calc_row_fw](M, workers if workers > 0 else M) 
 
 @always_inline
 fn matmul(inout c: Tensor, a: Tensor, b: Tensor):
-
-    var a_shape = DynamicVector[Int](0)
-    var b_shape = DynamicVector[Int](0)
-    var a_strides = DynamicVector[Int](0)
-    var b_strides = DynamicVector[Int](0)
-    if(a.num_dims > b.num_dims): 
-        for i in range(a.num_dims - b.num_dims):
-            b_shape.push_back(1)
-    elif(a.num_dims < b.num_dims): 
-        for i in range(b.num_dims - a.num_dims):
-            a_shape.push_back(1)
-    for i in range(a.num_dims):
-        a_shape.push_back(a.shape.load(i))
-    for i in range(b.num_dims):
-        b_shape.push_back(b.shape.load(i))
-    for i in range(len(a_shape)):
-        a_strides.push_back(1)
-        b_strides.push_back(1)
-    for i in range(len(a_shape)-2,-1,-1):
-        a_strides[i] = a_strides[i+1]*a_shape[i+1]
-        b_strides[i] = b_strides[i+1]*b_shape[i+1]
-
-    recursive_matmul(c,a,b,0,0,0,0,a_shape,b_shape,a_strides,b_strides)
-
-# @always_inline
-# fn matmul(inout c: Tensor, a: Tensor, b: Tensor):
-#     var a_matrix_size = a.shape[a.num_dims-2] * a.shape[a.num_dims-1]
-#     var b_matrix_size = b.shape[b.num_dims-2] * b.shape[b.num_dims-1]
-#     var c_matrix_size = c.shape[c.num_dims-2] * c.shape[c.num_dims-1]
-
-#     let M = c.shape[c.num_dims-2]
-#     let K = a.shape[a.num_dims-1]
-#     let N = c.shape[c.num_dims-1] 
-
-#     var offset_a: Int = 0
-#     var offset_b: Int = 0
-#     var offset_c: Int = 0
-
-#     for s in range(c.cap // c_matrix_size):
-        
-#         offset_c = s * c_matrix_size
-
-#         # consider broadcasting
-#         if(a.cap//a_matrix_size == b.cap//b_matrix_size):
-#             offset_a = s * a_matrix_size
-#             offset_b = s * b_matrix_size
-#         elif(a.cap//a_matrix_size > b.cap//b_matrix_size):
-#             offset_a = s * a_matrix_size
-#         else:
-#             offset_b = s * b_matrix_size
-
-#         @parameter
-#         fn calc_row(m: Int):
-#             for k in range(K):
-#                 @parameter
-#                 fn dot[nelts: Int](n: Int):
-#                     c.data.simd_store[nelts](offset_c + m*N+n, c.data.simd_load[nelts](offset_c + m*N+n) + a.data.load(offset_a + m*K+k) * b.data.simd_load[nelts](offset_b + k*N+n))
-#                 vectorize[nelts, dot](N)
-#         parallelize[calc_row](M, workers if workers > 0 else M) 
+    recursive_broadcast_fw[kernel_matmul_fw, base_case_matmul_fw](c,a,b)
 
 
 @always_inline
@@ -453,202 +465,100 @@ fn std(inout b: Tensor, a: Tensor):
 
 # elementwise operators ####################################################
 
-# e_mul - recursive call for proper broadcasting
-fn recursive_mul(inout c: Tensor, borrowed a: Tensor, borrowed b: Tensor, a_index: Int, b_index: Int, c_index: Int, depth: Int, borrowed a_shape: DynamicVector[Int], borrowed b_shape: DynamicVector[Int], borrowed a_strides: DynamicVector[Int], borrowed b_strides: DynamicVector[Int]):
+@parameter
+fn base_case_mul_fw(depth: Int, a: Tensor, b: Tensor) -> Bool:
+    return strides_a(depth,a,b)*shape_a(depth,a,b) == strides_b(depth,a,b)*shape_b(depth,a,b)
 
-    # base case
-    if(a_strides[depth]*a_shape[depth] == b_strides[depth]*b_shape[depth]):
-        @parameter
-        fn v_mul[nelts: Int](i: Int):
-            c.data.simd_store[nelts](
-                c_index*c.strides[depth]*c.shape[depth] + i, a.data.simd_load[nelts](a_index*a_strides[depth]*a_shape[depth] + i) * b.data.simd_load[nelts](b_index*b_strides[depth]*b_shape[depth] + i)
-            )
-        vectorize[nelts, v_mul](c.strides[depth]*c.shape[depth])
-        return
+@parameter
+fn kernel_mul_fw(inout c: Tensor, a: Tensor, b: Tensor, a_index: Int, b_index: Int, c_index: Int, depth: Int) -> None:
 
-    if(a_shape[depth] != 1 and b_shape[depth] == 1):
-        for s in range(a_shape[depth]):
-            recursive_mul(c,a,b,a_shape[depth]*a_index + s, b_shape[depth]*b_index,a_shape[depth]*a_index + s, depth+1, a_shape, b_shape, a_strides, b_strides)
-    elif(a_shape[depth] == 1 and b_shape[depth] != 1):
-        for s in range(b_shape[depth]):
-            recursive_mul(c,a,b,a_shape[depth]*a_index, b_shape[depth]*b_index + s, b_shape[depth]*b_index + s,depth+1, a_shape, b_shape, a_strides, b_strides)
-    else:
-        for s in range(a_shape[depth]):
-            recursive_mul(c,a,b,a_shape[depth]*a_index + s, b_shape[depth]*b_index + s, c.shape[depth]*c_index + s,depth+1, a_shape, b_shape, a_strides, b_strides)
+    let offset_a = a_index*shape_a(depth,a,b)*strides_a(depth,a,b)
+    let offset_b = b_index*shape_b(depth,a,b)*strides_b(depth,a,b)
+    let c_rest = c.shape[depth]*c.strides[depth]
+    let offset_c = c_index*c_rest
+
+    @parameter
+    fn v_mul[nelts: Int](i: Int):
+        c.data.simd_store[nelts](
+            offset_c + i, a.data.simd_load[nelts](offset_a + i) * b.data.simd_load[nelts](offset_b + i)
+        )
+    vectorize[nelts, v_mul](c_rest)
 
 @always_inline
 fn e_mul(inout c: Tensor, a: Tensor, b: Tensor):
+    recursive_broadcast_fw[kernel_mul_fw, base_case_mul_fw](c,a,b)
 
-    var a_shape = DynamicVector[Int](0)
-    var b_shape = DynamicVector[Int](0)
-    var a_strides = DynamicVector[Int](0)
-    var b_strides = DynamicVector[Int](0)
-    if(a.num_dims > b.num_dims): 
-        for i in range(a.num_dims - b.num_dims):
-            b_shape.push_back(1)
-    elif(a.num_dims < b.num_dims): 
-        for i in range(b.num_dims - a.num_dims):
-            a_shape.push_back(1)
-    for i in range(a.num_dims):
-        a_shape.push_back(a.shape.load(i))
-    for i in range(b.num_dims):
-        b_shape.push_back(b.shape.load(i))
-    for i in range(len(a_shape)):
-        a_strides.push_back(1)
-        b_strides.push_back(1)
-    for i in range(len(a_shape)-2,-1,-1):
-        a_strides[i] = a_strides[i+1]*a_shape[i+1]
-        b_strides[i] = b_strides[i+1]*b_shape[i+1]
 
-    recursive_mul(c,a,b,0,0,0,0,a_shape,b_shape,a_strides,b_strides)
+@parameter
+fn base_case_add_fw(depth: Int, a: Tensor, b: Tensor) -> Bool:
+    return strides_a(depth,a,b)*shape_a(depth,a,b) == strides_b(depth,a,b)*shape_b(depth,a,b)
 
-# e_add - recursive call for proper broadcasting
-fn recursive_add(inout c: Tensor, borrowed a: Tensor, borrowed b: Tensor, a_index: Int, b_index: Int, c_index: Int, depth: Int, borrowed a_shape: DynamicVector[Int], borrowed b_shape: DynamicVector[Int], borrowed a_strides: DynamicVector[Int], borrowed b_strides: DynamicVector[Int]):
+@parameter
+fn kernel_add_fw(inout c: Tensor, a: Tensor, b: Tensor, a_index: Int, b_index: Int, c_index: Int, depth: Int) -> None:
+    
+    let offset_a = a_index*shape_a(depth,a,b)*strides_a(depth,a,b)
+    let offset_b = b_index*shape_b(depth,a,b)*strides_b(depth,a,b)
+    let c_rest = c.shape[depth]*c.strides[depth]
+    let offset_c = c_index*c_rest
 
-    # base case
-    if(a_strides[depth]*a_shape[depth] == b_strides[depth]*b_shape[depth]):
-        @parameter
-        fn v_add[nelts: Int](i: Int):
-            c.data.simd_store[nelts](
-                c_index*c.shape[depth]*c.strides[depth] +  i, a.data.simd_load[nelts](a_index*a_shape[depth]*a_strides[depth] +  i) + b.data.simd_load[nelts](b_index*b_shape[depth]*b_strides[depth] + i)
-            )
-        vectorize[nelts, v_add](c.strides[depth]*c.shape[depth])
-        return
-
-    if(a_shape[depth] != 1 and b_shape[depth] == 1):
-        for s in range(a_shape[depth]):
-            recursive_add(c,a,b,a_shape[depth]*a_index + s, b_shape[depth]*b_index,a_shape[depth]*a_index + s, depth+1, a_shape, b_shape, a_strides, b_strides)
-    elif(a_shape[depth] == 1 and b_shape[depth] != 1):
-        for s in range(b_shape[depth]):
-            recursive_add(c,a,b,a_shape[depth]*a_index, b_shape[depth]*b_index + s, b_shape[depth]*b_index + s,depth+1, a_shape, b_shape, a_strides, b_strides)
-    else:
-        for s in range(c.shape[depth]):
-            recursive_add(c,a,b,a_shape[depth]*a_index + s, b_shape[depth]*b_index + s, c.shape[depth]*c_index + s,depth+1, a_shape, b_shape, a_strides, b_strides)
+    @parameter
+    fn v_add[nelts: Int](i: Int):
+        c.data.simd_store[nelts](
+            offset_c + i, a.data.simd_load[nelts](offset_a + i) + b.data.simd_load[nelts](offset_b + i)
+        )
+    vectorize[nelts, v_add](c_rest)
 
 @always_inline
 fn e_add(inout c: Tensor, a: Tensor, b: Tensor):
-
-    var a_shape = DynamicVector[Int](0)
-    var b_shape = DynamicVector[Int](0)
-    var a_strides = DynamicVector[Int](0)
-    var b_strides = DynamicVector[Int](0)
-    if(a.num_dims > b.num_dims): 
-        for i in range(a.num_dims - b.num_dims):
-            b_shape.push_back(1)
-    elif(a.num_dims < b.num_dims): 
-        for i in range(b.num_dims - a.num_dims):
-            a_shape.push_back(1)
-    for i in range(a.num_dims):
-        a_shape.push_back(a.shape.load(i))
-    for i in range(b.num_dims):
-        b_shape.push_back(b.shape.load(i))
-    for i in range(len(a_shape)):
-        a_strides.push_back(1)
-        b_strides.push_back(1)
-    for i in range(len(a_shape)-2,-1,-1):
-        a_strides[i] = a_strides[i+1]*a_shape[i+1]
-        b_strides[i] = b_strides[i+1]*b_shape[i+1]
-
-    recursive_add(c,a,b,0,0,0,0,a_shape,b_shape,a_strides,b_strides)
+    recursive_broadcast_fw[kernel_add_fw, base_case_add_fw](c,a,b)
 
 
-# e_sub - recursive call for proper broadcasting
-fn recursive_sub(inout c: Tensor, borrowed a: Tensor, borrowed b: Tensor, a_index: Int, b_index: Int, c_index: Int, depth: Int, borrowed a_shape: DynamicVector[Int], borrowed b_shape: DynamicVector[Int], borrowed a_strides: DynamicVector[Int], borrowed b_strides: DynamicVector[Int]):
+@parameter
+fn base_case_sub_fw(depth: Int, a: Tensor, b: Tensor) -> Bool:
+    return strides_a(depth,a,b)*shape_a(depth,a,b) == strides_b(depth,a,b)*shape_b(depth,a,b)
+
+@parameter
+fn kernel_sub_fw(inout c: Tensor, a: Tensor, b: Tensor, a_index: Int, b_index: Int, c_index: Int, depth: Int) -> None:
     
-    # base case
-    if(a_strides[depth]*a_shape[depth] == b_strides[depth]*b_shape[depth] ):
-        @parameter
-        fn v_sub[nelts: Int](i: Int):
-            c.data.simd_store[nelts](
-                c_index*c.strides[depth]*c.shape[depth] + i, a.data.simd_load[nelts](a_index*a_strides[depth]*a_shape[depth] + i) - b.data.simd_load[nelts](b_index*b_strides[depth]*b_shape[depth] + i)
-            )
-        vectorize[nelts, v_sub](c.strides[depth]*c.shape[depth])
-        return
+    let offset_a = a_index*shape_a(depth,a,b)*strides_a(depth,a,b)
+    let offset_b = b_index*shape_b(depth,a,b)*strides_b(depth,a,b)
+    let c_rest = c.shape[depth]*c.strides[depth]
+    let offset_c = c_index*c_rest
 
-    if(a_shape[depth] != 1 and b_shape[depth] == 1):
-        for s in range(a_shape[depth]):
-            recursive_sub(c,a,b,a_shape[depth]*a_index + s, b_shape[depth]*b_index,a_shape[depth]*a_index + s, depth+1, a_shape, b_shape, a_strides, b_strides)
-    elif(a_shape[depth] == 1 and b_shape[depth] != 1):
-        for s in range(b_shape[depth]):
-            recursive_sub(c,a,b,a_shape[depth]*a_index, b_shape[depth]*b_index + s, b_shape[depth]*b_index + s,depth+1, a_shape, b_shape, a_strides, b_strides)
-    else:
-        for s in range(a_shape[depth]):
-            recursive_sub(c,a,b,a_shape[depth]*a_index + s, b_shape[depth]*b_index + s, c.shape[depth]*c_index + s,depth+1, a_shape, b_shape, a_strides, b_strides)
+    @parameter
+    fn v_sub[nelts: Int](i: Int):
+        c.data.simd_store[nelts](
+            offset_c + i, a.data.simd_load[nelts](offset_a + i) - b.data.simd_load[nelts](offset_b + i)
+        )
+    vectorize[nelts, v_sub](c_rest)
 
 @always_inline
 fn e_sub(inout c: Tensor, a: Tensor, b: Tensor):
+    recursive_broadcast_fw[kernel_sub_fw, base_case_sub_fw](c,a,b)
 
-    var a_shape = DynamicVector[Int](0)
-    var b_shape = DynamicVector[Int](0)
-    var a_strides = DynamicVector[Int](0)
-    var b_strides = DynamicVector[Int](0)
-    if(a.num_dims > b.num_dims): 
-        for i in range(a.num_dims - b.num_dims):
-            b_shape.push_back(1)
-    elif(a.num_dims < b.num_dims): 
-        for i in range(b.num_dims - a.num_dims):
-            a_shape.push_back(1)
-    for i in range(a.num_dims):
-        a_shape.push_back(a.shape.load(i))
-    for i in range(b.num_dims):
-        b_shape.push_back(b.shape.load(i))
-    for i in range(len(a_shape)):
-        a_strides.push_back(1)
-        b_strides.push_back(1)
-    for i in range(len(a_shape)-2,-1,-1):
-        a_strides[i] = a_strides[i+1]*a_shape[i+1]
-        b_strides[i] = b_strides[i+1]*b_shape[i+1]
 
-    recursive_sub(c,a,b,0,0,0,0,a_shape,b_shape,a_strides,b_strides)
+@parameter
+fn base_case_div_fw(depth: Int, a: Tensor, b: Tensor) -> Bool:
+    return strides_a(depth,a,b)*shape_a(depth,a,b) == strides_b(depth,a,b)*shape_b(depth,a,b)
 
-# e_div - recursive call for proper broadcasting
-fn recursive_div(inout c: Tensor, borrowed a: Tensor, borrowed b: Tensor, a_index: Int, b_index: Int, c_index: Int, depth: Int, borrowed a_shape: DynamicVector[Int], borrowed b_shape: DynamicVector[Int], borrowed a_strides: DynamicVector[Int], borrowed b_strides: DynamicVector[Int]):
+@parameter
+fn kernel_div_fw(inout c: Tensor, a: Tensor, b: Tensor, a_index: Int, b_index: Int, c_index: Int, depth: Int) -> None:
+    
+    let offset_a = a_index*shape_a(depth,a,b)*strides_a(depth,a,b)
+    let offset_b = b_index*shape_b(depth,a,b)*strides_b(depth,a,b)
+    let c_rest = c.shape[depth]*c.strides[depth]
+    let offset_c = c_index*c_rest
 
-    # base case
-    if(a_strides[depth]*a_shape[depth] == b_strides[depth]*b_shape[depth]):
-        @parameter
-        fn v_div[nelts: Int](i: Int):
-            c.data.simd_store[nelts](
-                c_index*c.strides[depth]*c.shape[depth] + i, a.data.simd_load[nelts](a_index*a_strides[depth]*a_shape[depth] + i) / b.data.simd_load[nelts](b_index*b_strides[depth]*b_shape[depth] + i)
-            )
-        vectorize[nelts, v_div](c.strides[depth]*c.shape[depth])
-        return
-
-    if(a_shape[depth] != 1 and b_shape[depth] == 1):
-        for s in range(a_shape[depth]):
-            recursive_div(c,a,b,a_shape[depth]*a_index + s, b_shape[depth]*b_index,a_shape[depth]*a_index + s, depth+1, a_shape, b_shape, a_strides, b_strides)
-    elif(a_shape[depth] == 1 and b_shape[depth] != 1):
-        for s in range(b_shape[depth]):
-            recursive_div(c,a,b,a_shape[depth]*a_index, b_shape[depth]*b_index + s, b_shape[depth]*b_index + s,depth+1, a_shape, b_shape, a_strides, b_strides)
-    else:
-        for s in range(a_shape[depth]):
-            recursive_div(c,a,b,a_shape[depth]*a_index + s, b_shape[depth]*b_index + s, c.shape[depth]*c_index + s,depth+1, a_shape, b_shape, a_strides, b_strides)
+    @parameter
+    fn v_div[nelts: Int](i: Int):
+        c.data.simd_store[nelts](
+            offset_c + i, a.data.simd_load[nelts](offset_a + i) / b.data.simd_load[nelts](offset_b + i)
+        )
+    vectorize[nelts, v_div](c_rest)
 
 @always_inline
 fn e_div(inout c: Tensor, a: Tensor, b: Tensor):
-
-    var a_shape = DynamicVector[Int](0)
-    var b_shape = DynamicVector[Int](0)
-    var a_strides = DynamicVector[Int](0)
-    var b_strides = DynamicVector[Int](0)
-    if(a.num_dims > b.num_dims): 
-        for i in range(a.num_dims - b.num_dims):
-            b_shape.push_back(1)
-    elif(a.num_dims < b.num_dims): 
-        for i in range(b.num_dims - a.num_dims):
-            a_shape.push_back(1)
-    for i in range(a.num_dims):
-        a_shape.push_back(a.shape.load(i))
-    for i in range(b.num_dims):
-        b_shape.push_back(b.shape.load(i))
-    for i in range(len(a_shape)):
-        a_strides.push_back(1)
-        b_strides.push_back(1)
-    for i in range(len(a_shape)-2,-1,-1):
-        a_strides[i] = a_strides[i+1]*a_shape[i+1]
-        b_strides[i] = b_strides[i+1]*b_shape[i+1]
-
-    recursive_div(c,a,b,0,0,0,0,a_shape,b_shape,a_strides,b_strides)
+    recursive_broadcast_fw[kernel_div_fw, base_case_div_fw](c,a,b)
 
 
 @always_inline

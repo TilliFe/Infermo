@@ -49,7 +49,7 @@ struct Model:
 
     @always_inline
     fn step(inout self):
-        self.nn.optimize('sgd_momentum', lr = 0.003, momentum = 0.9, weight_decay=0.01)
+        self.nn.optimize('sgd_momentum', lr = 0.0003, momentum = 0.9, weight_decay=0.001)
 
 
 # train the Model

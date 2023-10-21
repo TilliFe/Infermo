@@ -12,7 +12,7 @@ Mojo currently operates on CPU only. GPU support will come soon! Infermo is curr
 The operators listed below are methods of the `Module` class, which orchestrates both forward and backward computations. Each operator accepts one or two `Tensor` objects as input.
 
 - **matmul**: Performs matrix multiplication of two tensors.
-- **conv2d**: Applies a 2D convolution over an input signal composed of several input planes.
+- **conv_2d**: Applies a 2D convolution over an input signal composed of several input planes.
 - **max_pool_2d**: Applies a 2D max pooling over an input signal composed of several input planes.
 - **sum**: Returns the sum of all elements in the input tensor.
 - **softmax**: Applies a softmax function. It is applied to all slices along dim, and will re-scale them so that the element-wise sum is 1.
@@ -43,7 +43,7 @@ The operators listed below are methods of the `Module` class, which orchestrates
 
 - **linear**: This operator represents a dense layer of neurons. It can be used with or without the ReLU activation function, providing flexibility in network design.
 - **mlp**: Similar to the dense operator, but specifically tailored for use within a transformer block.
-- **conv_2d**: Executes a convolution operation with a specified tensor, commonly used in convolutional neural networks.
+- **conv2d**: Executes a convolution operation with a specified tensor, commonly used in convolutional neural networks.
 - **transformer_block, embed, unembed, pos_embed**: These are the fundamental building blocks of a Transformer model, providing the necessary operations for effective sequence transduction.
 - **DataLoader**: A utility for handling data. It reads, initializes, and loads data from a given .txt file, simplifying the data preparation process.
 
