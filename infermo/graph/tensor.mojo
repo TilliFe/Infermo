@@ -10,6 +10,7 @@ from math import sin, cos, log, sqrt, exp
 
 from ..helpers.shape import shape, Vec
 
+# @value
 @register_passable("trivial")
 struct Tensor:
     var id: Int
@@ -21,14 +22,16 @@ struct Tensor:
     var grad: DTypePointer[DType.float32] 
     var velocity: DTypePointer[DType.float32] 
     var parents: Pointer[Int]
+    var parents_dynamic: Pointer[Bool]
     var num_parents: Int
     var name: StringRef
-    var in_tensors: Bool
+    var in_nodes: Bool
+    var is_dynamic: Bool
     var visited: Bool
     var requires_grad: Bool
     var other_params: Pointer[Int]
 
-    fn __init__(_shape: DynamicVector[Int]) -> Self:
+    fn __init__(_shape: DynamicVector[Int], requires_grad: Bool = True) -> Self:
         let _num_dims = len(_shape)
         var _cap = _shape[0]
         for i in range(1,_num_dims):
@@ -55,6 +58,10 @@ struct Tensor:
 
         let parents = Pointer[Int].alloc(64)
         memset_zero(parents, 64)
+
+        let parents_dynamic = Pointer[Bool].alloc(64)
+        for i in range(64):
+            parents_dynamic.store(i,False)
         let num_parents = 0 
 
         let name = StringRef('none')
@@ -73,12 +80,25 @@ struct Tensor:
             grad: grad,
             velocity: velocity,
             parents: parents,
+            parents_dynamic: parents_dynamic,
             num_parents: num_parents,
-            in_tensors: False,
+            in_nodes: False,
+            is_dynamic: False,
             visited: False,
             requires_grad: True,
             other_params: other_params
         }
+
+    # fn __del__(owned self):
+    #     self.shape.free()
+    #     self.strides.free()
+    #     self.parents_dynamic.free()
+    #     self.data.free()
+    #     self.grad.free()
+    #     self.velocity.free()
+    #     self.other_params.free()
+    #     self.parents.free()
+
 
     @always_inline
     fn getId(self) -> Int:
@@ -387,10 +407,20 @@ struct Tensor:
                     print_no_newline("], velocity>\n\n")              
 
     @always_inline
-    fn add_parent(inout self, parentId: Int):
+    fn add_static_parent(inout self, parentId: Int):
         let index = self.num_parents
         self.parents.store(index, parentId)
+        self.parents_dynamic.store(index, False)
         self.num_parents += 1
+
+
+    @always_inline
+    fn set_parent(inout self, index: Int, other: Tensor):
+        self.parents.store(index,other.id)
+        if(other.is_dynamic):
+            self.parents_dynamic.store(index,True)
+        else:
+            self.parents_dynamic.store(index,False)
 
     @always_inline
     fn get_parent(self, index: Int) -> Int:

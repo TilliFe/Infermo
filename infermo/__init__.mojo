@@ -5,4 +5,4 @@ from .operators.forward import matmul, conv_2d, max_pool_2d, sum, softmax, mse, 
 from .operators.backward import matmul_grad, conv_2d_grad, max_pool_2d_grad, sum_grad, softmax_grad, mse_grad, ce_grad, reshape_grad, transpose_grad, mean_grad, variance_grad, e_mul_grad, e_add_grad, e_sub_grad, e_div_grad, e_sqrt_grad, e_abs_grad, e_exp2_grad, e_exp_grad, e_log2_grad, e_log_grad, e_sin_grad, e_cos_grad, e_tan_grad, e_asin_grad, e_acos_grad, e_atan_grad, e_sinh_grad, e_cosh_grad, e_tanh_grad, e_relu_grad, e_copy_grad 
 from .helpers.dataLoader import DataLoader
 from .helpers.shape import shape, list, Vec
-from .helpers.tensorOps import linear, conv2d, max, accuracy, mask, scale, embed, posembed, unembed, attention, mlp, transformer_block
+from .helpers.tensorOps import Linear, Conv2d, max, accuracy, mask, scale, embed, posembed, unembed, attention, mlp, transformer_block

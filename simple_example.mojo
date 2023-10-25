@@ -4,17 +4,16 @@ from infermo import Module, Tensor, shape
 fn main():
     # init
     var nn = Module()
-    var a = Tensor(shape(1,5,3))
-    var b = Tensor(shape(2,3,4))
+    var a = nn.tensor(shape(2,2,2,3))
+    var b = nn.tensor(shape(2,2,3,4))
 
     # specify tensor entries
-    a.fill(2)
-    b.fill(3)
+    a.fill(2.0)
+    b.fill(3.0)
 
     # perform computation 
     var c = nn.matmul(a,b)
     var D = nn.sum(c) # compute sum, since the grad can only be computed of a scalar value
-    nn.forward(c)
 
     # print result of matrix multiplication
     c.print_data()
@@ -23,6 +22,3 @@ fn main():
     nn.backward(D)
     a.print_grad()
     b.print_grad()
-
-    nn.print_forward_durations()
-    nn.print_backward_durations()

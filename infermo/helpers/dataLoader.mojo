@@ -8,7 +8,6 @@ from random import rand, random_si64, seed, randint
 from math import sin, cos, log, sqrt, exp
 
 
-from ..graph.tensor import Tensor
 from ..helpers.shape import shape, Vec
 
 fn is_int(s: String) -> Bool:

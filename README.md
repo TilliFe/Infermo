@@ -6,7 +6,13 @@ Infermo is a Mojo library that provides two high-level features:
 - Tensor computation
 - Deep neural networks built on a tape-based autograd system
 
-Mojo currently operates on CPU only. GPU support will come soon! Infermo is currently still a Proof-of-Concept, if you encounter any bugs, feel free to create an issue or a PR. Thank you for your contribution. :)
+Mojo currently operates on CPU only. GPU support will come soon! Infermo is currently still a Proof-of-Concept, if you encounter any bugs, feel free to create an issue or a PR. Thank you for your contribution.
+
+
+With GitHub, I usually insert a blockquote.
+
+> **_New:_** Infermo just got a major upgrade, going from a static computation graph to a fully dynamic one!🔥 
+The example architectures in the repo (e.g. the transformer) still need to be adopted to the new programming style.
 
 ## Available Operators
 The operators listed below are methods of the `Module` class, which orchestrates both forward and backward computations. Each operator accepts one or two `Tensor` objects as input. All binary operators accept differently shaped Tensors via broadcasting.
@@ -64,64 +70,61 @@ struct Model:
     var nn: Module
     var input: Tensor
     var true_vals: Tensor
-    var logits: Tensor
     var loss: Tensor
-    var avg_acc: Float32
+    var l1: Linear
+    var l2: Linear
+    var l3: Linear
+    var l4: Linear
 
     fn __init__(inout self):
-        self.input = Tensor(shape(64,784))
-        self.input.requires_grad = False
-        self.true_vals = Tensor(shape(64,10))
-        self.true_vals.requires_grad = False
         self.nn = Module()
-        self.avg_acc = 0
+        let batch_size = 64
+        self.input = self.nn.tensor(shape(batch_size,784),requires_grad=False)
+        self.true_vals = self.nn.tensor(shape(batch_size,10),requires_grad=False)
+        self.loss = Tensor(shape(1))
+        self.l1 = Linear(self.nn,784,64,batch_size,add_bias=True,activation="relu")
+        self.l2 = Linear(self.nn,64,64,batch_size,add_bias=True,activation="relu")
+        self.l3 = Linear(self.nn,64,64,batch_size,add_bias=True,activation="relu")
+        self.l4 = Linear(self.nn,64,10,batch_size,add_bias=True,activation="none")
 
-        # define Model architecture
-        var x = linear(self.nn,self.input, num_neurons=64, add_bias=True, activation='relu')
-        for i in range(2):
-            x = linear(self.nn,x, num_neurons=64, add_bias=True, activation='relu')
-        x = linear(self.nn,x,10,True,'none')
-        self.logits = self.nn.softmax(x)
-        self.loss = self.nn.ce(self.true_vals,self.logits)
+    @always_inline     
+    fn forward(inout self, _input: DTypePointer[DType.float32], _true_vals: DTypePointer[DType.float32]) -> Tuple[Float32,Float32,Tensor]:
+        
+        # important clearing methods, since our compute graph is dynamic
+        self.nn.clear_cache()
+        self.nn.zero_grads()
 
-    @always_inline
-    fn forward(inout self, _input: DTypePointer[DType.float32], _true_vals: DTypePointer[DType.float32]) -> Tensor:
-
-        # fill the input and true_vals Tensors with theri data
-        self.nn.Tensors[0].set_data(_input) # bug!
+        # fill the input and true_vals tensors with data
+        self.input.set_data(_input)
         self.true_vals.set_data(_true_vals)
 
-        # one forward pass through the network
-        self.nn.forward(self.logits)
+        # define forward pass
+        var x = self.l1.forward(self.nn,self.input)
+        x = self.l2.forward(self.nn,x)
+        x = self.l3.forward(self.nn,x)
+        x = self.l4.forward(self.nn,x)
+        var logits = self.nn.softmax(x)
+        self.loss = self.nn.ce(self.true_vals,logits)
 
-        # some additional ops, not necessary for the training, just for showing the accuracy
-        let one_hots = one_hot(self.logits)
-        self.avg_acc = accuracy(one_hots,self.true_vals)
-
-        return self.logits
-
-    @always_inline
-    fn backward(inout self):
-        self.nn.backward(self.loss)
-
-    @always_inline
-    fn step(inout self):
-        self.nn.optimize('sgd_momentum', lr = 0.0001, momentum = 0.9)
+        # compute accuracy
+        let one_hots = max(logits)
+        let avg_acc = accuracy(one_hots,self.true_vals)
+        return Tuple(self.loss.data.load(0),avg_acc,one_hots)   
 ```
 
 Read in the MNIST dataset from a file, initialize the Model and define the number of epochs, then let it train on a randomly generated batch of data.
 
 ```python
-fn main()raises:
+fn main() raises:
 
     # init
-    var dl = DataLoader('./datasets/mnist.txt')
+    var dl = DataLoader('./infermo/datasets/mnist.txt')
     var model = Model()
 
-    let num_epochs = 1000
+    let num_epochs = 10000
     var loss_sum: Float32 = 0
     var avg_acc: Float32 = 0
-    let every = 100
+    let every = 500
 
     for epoch in range(1,num_epochs+1):
         # load a batch of images into the Model
@@ -134,21 +137,19 @@ fn main()raises:
         # load the labels for the images (one_hot encded from 0 to 9)
         let labels = dl.one_hot(
             batch_size=64,
-            index=0, # regarding the columm of the labels in the dataset
+            index=0,
             ndims=10
         )
-        let logits = model.forward(inputs,labels)
-        model.backward()
-        model.step()
+        let res = model.forward(inputs,labels)
+        model.nn.backward(model.loss)
+        model.nn.optimize('sgd_momentum', lr = 0.003, momentum = 0.9, weight_decay=0.001)
 
-        loss_sum += model.loss.data.load(0)
-        avg_acc += model.avg_acc
+        loss_sum += res.get[0,Float32]()
+        avg_acc += res.get[1,Float32]()
         if( epoch % every == 0):
-            print("Epoch", epoch,", AvgLoss =", loss_sum / every, ", AvgAccuracy =", avg_acc / every)
-            loss_sum = 0
+            print("Epoch", epoch,", avgLoss =", loss_sum / every, ", avg_accuracy =", avg_acc / every)
+            loss_sum = 0      
             avg_acc = 0
-            # logits.print_data()
-            # model.true_vals.print_data()
 ```
 
 ### Simple Example
@@ -161,25 +162,24 @@ from infermo import Module, Tensor, shape
 fn main():
     # init
     var nn = Module()
-    var A = Tensor(shape(2,5,3))
-    var B = Tensor(shape(1,3,4))
+    var a = nn.tensor(shape(2,2,2,3))
+    var b = nn.tensor(shape(2,2,3,4))
 
     # specify tensor entries
-    A.fill(2)
-    B.fill(3)
+    a.fill(2.0)
+    b.fill(3.0)
 
-    # perform computation
-    var C = nn.matmul(A,B)
-    var D = nn.sum(C) # compute sum, since the gradient can only be computed of a scalar value
-    nn.forward(C)
+    # perform computation 
+    var c = nn.matmul(a,b)
+    var D = nn.sum(c) # compute sum, since the grad can only be computed of a scalar value
 
     # print result of matrix multiplication
-    C.print_data()
+    c.print_data()
 
-    # compute gradients of A and B
+    # compute grads of a and b
     nn.backward(D)
-    A.print_grad()
-    B.print_grad()
+    a.print_grad()
+    b.print_grad()
 ```
 
 

@@ -12,52 +12,58 @@ from ..graph. module import Module
 from ..helpers.shape import Vec, shape
 
 
-@always_inline
-fn conv2d(inout nn: Module, inout x: Tensor, out_channels: Int, kernel_width: Int, kernel_height: Int, stride: Int, padding: Int, use_bias: Bool = True) -> Tensor:
+struct Conv2d:
+    var kernels: Tensor
+    var bias_raw: Tensor
+    var ones: Tensor
+    var use_bias: Bool
+    var padding: Int
+    var stride: Int
+    var in_channels: Int
+    var out_channels: Int
     
-    # init
-    let batch_size = x.shape[0]
-    let in_channels = x.shape[1]
-    var kernels = Tensor(shape(out_channels,in_channels,kernel_width,kernel_height))
-    kernels.randHe()
-    var conv = nn.conv_2d(x,kernels,padding,stride)
-
-    if(use_bias):
-        var bias_raw = Tensor(shape(out_channels,1))
-        bias_raw.randn(0.001)
-        var ones = Tensor(shape(1,conv.shape[2]*conv.shape[3]))
-        ones.fill(1.0)
-        ones.requires_grad = False
-        var bias_ones = nn.matmul(bias_raw,ones)
-        var bias = nn.reshape(bias_ones,shape(out_channels,conv.shape[2],conv.shape[3]))
-        return nn.add(conv,bias)
-    else:
+    fn __init__(inout self, inout nn: Module, in_channels: Int, out_channels: Int, kernel_width: Int, kernel_height: Int, stride: Int, padding: Int, use_bias: Bool = True):
+        self.kernels = nn.tensor(shape(out_channels,in_channels,kernel_width,kernel_height))
+        self.kernels.randHe()
+        self.bias_raw = nn.tensor(shape(out_channels,1))
+        self.bias_raw.randn(0.001)
+        self.use_bias = use_bias
+        self.ones = nn.tensor(shape(1,28*28), requires_grad=False)
+        self.ones.fill(1.0)
+        self.padding = padding
+        self.stride = stride
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+    
+    fn forward(inout self, inout nn: Module, inout x: Tensor) -> Tensor:
+        let conv = nn.conv_2d(x,self.kernels,self.padding,self.stride)
+        # if(self.use_bias):
+        #     var bias_ones = nn.matmul(self.bias_raw,self.ones)
+        #     var bias_reshaped = nn.reshape(bias_ones,shape(self.out_channels,conv.shape[2],conv.shape[3]))
+        #     return nn.add(conv,bias_reshaped)
+        # else:
         return conv
 
 
-@always_inline
-fn linear(inout nn: Module, inout x: Tensor, num_neurons: Int, add_bias : Bool = True, activation: String = 'relu') -> Tensor:
-    let x_rows = x.shape[x.num_dims - 2]
-    let x_cols = x.shape[x.num_dims - 1]
-    var W = Tensor(shape(x_cols,num_neurons))
+struct Linear:
+    var W: Tensor
+    var bias: Tensor
+    var activation: String
 
-    W.randHe()
-    if(add_bias):
-        var ones = Tensor(shape(x_rows,1))
-        var bias = Tensor(shape(1,num_neurons))
-        ones.fill(1)
-        ones.requires_grad = False
-        bias.fill(0.1)
-        var xW = nn.matmul(x,W)    
-        var ob = nn.matmul(ones,bias)
-        x = nn.add(xW,ob)
-        if(activation == 'relu'):
-            x = nn.relu(x)
-    else:
-        x = nn.matmul(x,W)
-        if(activation == 'relu'):
-            x = nn.relu(x)
-    return x
+    fn __init__(inout self, inout nn: Module, in_neurons: Int, out_neurons: Int, batch_size: Int, add_bias : Bool = True, activation: String = 'relu'):
+        self.W = nn.tensor(shape(in_neurons,out_neurons))
+        self.W.randHe()
+        self.bias = nn.tensor(shape(1,out_neurons))
+        self.bias.fill(0.01)
+        self.activation = activation
+
+    fn forward(inout self, inout nn: Module, inout x: Tensor) -> Tensor:
+        var xW = nn.matmul(x,self.W)    
+        var added = nn.add(xW,self.bias)
+        if(self.activation == 'relu'):
+            return nn.relu(added)
+        return added
+
 
 
 @always_inline
@@ -112,7 +118,7 @@ fn scale(inout nn: Module, inout a: Tensor, scalar: Float32) -> Tensor:
         new_shape.push_back(a.shape[i])
     new_shape.push_back(N)
 
-    var S = Tensor(new_shape)
+    var S = nn.tensor(new_shape)
     for s in range(a.cap // (N*N)):
         for i in range(N):
             S.set_data(s*N*N + i*N+i, scalar)
@@ -131,7 +137,7 @@ fn mask(inout nn: Module, inout a: Tensor, l_value: Float32 = 0.0, u_value: Floa
     for i in range(num_dims-2,num_dims):
         new_shape.push_back(a.shape[i])
 
-    var Mask = Tensor(new_shape)
+    var Mask = nn.tensor(new_shape)
 
     for i in range(M):
         for j in range(N):
@@ -147,21 +153,21 @@ fn mask(inout nn: Module, inout a: Tensor, l_value: Float32 = 0.0, u_value: Floa
 
 @always_inline
 fn embed(inout nn: Module, d_vocab: Int, d_Model: Int, batch_size: Int, init_std: Float32, inout x: Tensor) -> Tensor:
-    var W_E = Tensor(shape(d_vocab,d_Model))
+    var W_E = nn.tensor(shape(d_vocab,d_Model))
     W_E.randn(init_std)
     return nn.matmul(x,W_E)
 
 
 @always_inline
 fn unembed(inout nn: Module, d_vocab: Int, d_Model: Int, batch_size: Int, init_std: Float32, inout x: Tensor) -> Tensor:
-    var W_U = Tensor(shape(d_Model,d_vocab))
+    var W_U = nn.tensor(shape(d_Model,d_vocab))
     W_U.randn(init_std)
     return nn.matmul(x, W_U)
 
 
 @always_inline
 fn posembed(inout nn: Module, max_ctx: Int, d_Model: Int, batch_size: Int, init_std: Float32, inout x: Tensor) -> Tensor:
-    var W_pos = Tensor(shape(max_ctx,d_Model))
+    var W_pos = nn.tensor(shape(max_ctx,d_Model))
     W_pos.randn(init_std)
     return nn.matmul(W_pos, x)
 
@@ -173,10 +179,10 @@ fn attention(inout nn: Module, d_Model: Int, num_heads: Int, d_head: Int, n_ctx:
     var x_t_unreshaped = nn.transpose(x)
     var x_t = nn.reshape(x_t_unreshaped,shape(batch_size,num_heads,d_Model,seq_len))
 
-    var W_K = Tensor(shape(num_heads, d_head, d_Model))
-    var W_Q = Tensor(shape(num_heads, d_head, d_Model))
-    var W_V = Tensor(shape(num_heads, d_head, d_Model))
-    var W_O = Tensor(shape(num_heads*d_head, d_Model))
+    var W_K = nn.tensor(shape(num_heads, d_head, d_Model))
+    var W_Q = nn.tensor(shape(num_heads, d_head, d_Model))
+    var W_V = nn.tensor(shape(num_heads, d_head, d_Model))
+    var W_O = nn.tensor(shape(num_heads*d_head, d_Model))
     W_K.randn(init_std)
     W_Q.randn(init_std) 
     W_V.randn(init_std)
@@ -205,20 +211,20 @@ fn mlp(inout nn: Module, d_Model: Int, d_mlp: Int, batch_size: Int, seq_len: Int
     # init
     var x_t = nn.transpose(x) # shape: batch_size,d_Model,seq_len
 
-    var W_in = Tensor(shape(d_mlp,d_Model))
+    var W_in = nn.tensor(shape(d_mlp,d_Model))
     W_in.randn(init_std)
 
-    var b_in_flat = Tensor(shape(d_mlp,1))
-    var ones_in = Tensor(shape(1,seq_len))
+    var b_in_flat = nn.tensor(shape(d_mlp,1))
+    var ones_in = nn.tensor(shape(1,seq_len))
     ones_in.fill(1)
     ones_in.requires_grad = False
     var b_in = nn.matmul(b_in_flat,ones_in)
 
-    var W_out = Tensor(shape(d_Model,d_mlp))
+    var W_out = nn.tensor(shape(d_Model,d_mlp))
     W_out.randn(init_std)
 
-    var b_out_flat = Tensor(shape(d_Model,1))
-    var ones_out = Tensor(shape(1,seq_len))
+    var b_out_flat = nn.tensor(shape(d_Model,1))
+    var ones_out = nn.tensor(shape(1,seq_len))
     ones_out.fill(1)
     ones_out.requires_grad = False
     var b_out = nn.matmul(b_out_flat,ones_out)
