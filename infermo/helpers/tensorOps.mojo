@@ -14,35 +14,35 @@ from ..helpers.shape import Vec, shape
 
 struct Conv2d:
     var kernels: Tensor
-    var bias_raw: Tensor
-    var ones: Tensor
-    var use_bias: Bool
     var padding: Int
     var stride: Int
-    var in_channels: Int
-    var out_channels: Int
+    # var in_channels: Int
+    # var out_channels: Int
+    # var bias_raw: Tensor
+    # var ones: Tensor
+    # var use_bias: Bool
     
     fn __init__(inout self, inout nn: Module, in_channels: Int, out_channels: Int, kernel_width: Int, kernel_height: Int, stride: Int, padding: Int, use_bias: Bool = True):
         self.kernels = nn.tensor(shape(out_channels,in_channels,kernel_width,kernel_height))
         self.kernels.randHe()
-        self.bias_raw = nn.tensor(shape(out_channels,1))
-        self.bias_raw.randn(0.001)
-        self.use_bias = use_bias
-        self.ones = nn.tensor(shape(1,28*28), requires_grad=False)
-        self.ones.fill(1.0)
         self.padding = padding
         self.stride = stride
-        self.in_channels = in_channels
-        self.out_channels = out_channels
+        # self.in_channels = in_channels
+        # self.out_channels = out_channels
+        # self.bias_raw = nn.tensor(shape(out_channels,1))
+        # self.bias_raw.randn(0.001)
+        # self.use_bias = use_bias
+        # self.ones = nn.tensor(shape(1,28*28), requires_grad=False)
+        # self.ones.fill(1.0)
     
     fn forward(inout self, inout nn: Module, inout x: Tensor) -> Tensor:
-        let conv = nn.conv_2d(x,self.kernels,self.padding,self.stride)
+        return nn.conv_2d(x,self.kernels,self.padding,self.stride)
         # if(self.use_bias):
         #     var bias_ones = nn.matmul(self.bias_raw,self.ones)
         #     var bias_reshaped = nn.reshape(bias_ones,shape(self.out_channels,conv.shape[2],conv.shape[3]))
         #     return nn.add(conv,bias_reshaped)
         # else:
-        return conv
+        # return conv
 
 
 struct Linear:
@@ -64,7 +64,43 @@ struct Linear:
             return nn.relu(added)
         return added
 
+struct Mlp:
+    var neurons_per_layer: DynamicVector[Int]
+    var W_id_list: DynamicVector[Int]
+    var bias_id_list: DynamicVector[Int]
+    var activation: String
+    var num_layers: Int
 
+    fn __init__(inout self, inout nn: Module, neurons_per_layer: DynamicVector[Int], add_bias : Bool = True, activation: String = 'relu'):
+        self.num_layers = len(neurons_per_layer)
+        self.neurons_per_layer = DynamicVector[Int]()
+        self.W_id_list = DynamicVector[Int]()
+        self.bias_id_list = DynamicVector[Int]()
+
+        for i in range(self.num_layers-1):
+            let W = nn.tensor(shape(neurons_per_layer[i],neurons_per_layer[i+1]))
+            W.randHe()
+            self.W_id_list.push_back(W.id)
+            let bias = nn.tensor(shape(1,neurons_per_layer[i+1]))
+            bias.fill(0.01)
+            self.bias_id_list.push_back(bias.id)
+            if(i == self.num_layers-1): break
+            
+        self.activation = activation
+
+
+    @always_inline
+    fn forward(inout self, inout nn: Module, inout _x: Tensor) -> Tensor:
+        var x = _x
+        for i in range(self.num_layers-1):
+            if(i == self.num_layers-1): break
+            var W = nn.nodes[self.W_id_list[i]]
+            var bias = nn.nodes[self.bias_id_list[i]]
+            var xW = nn.matmul(x,W)    
+            var added = nn.add(xW,bias)
+            if(self.activation == 'relu'):      
+                x = nn.relu(added)
+        return x
 
 @always_inline
 fn max(inout a: Tensor) -> Tensor:
@@ -206,60 +242,62 @@ fn attention(inout nn: Module, d_Model: Int, num_heads: Int, d_head: Int, n_ctx:
     return nn.matmul(x,W_O)        # batch_size, seq_len, d_Model
 
 
-fn mlp(inout nn: Module, d_Model: Int, d_mlp: Int, batch_size: Int, seq_len: Int, init_std: Float32, inout x: Tensor) -> Tensor:
+# fn mlp(inout nn: Module, d_Model: Int, d_mlp: Int, batch_size: Int, seq_len: Int, init_std: Float32, inout x: Tensor) -> Tensor:
 
-    # init
-    var x_t = nn.transpose(x) # shape: batch_size,d_Model,seq_len
+#     # init
+#     var x_t = nn.transpose(x) # shape: batch_size,d_Model,seq_len
 
-    var W_in = nn.tensor(shape(d_mlp,d_Model))
-    W_in.randn(init_std)
+#     var W_in = nn.tensor(shape(d_mlp,d_Model))
+#     W_in.randn(init_std)
 
-    var b_in_flat = nn.tensor(shape(d_mlp,1))
-    var ones_in = nn.tensor(shape(1,seq_len))
-    ones_in.fill(1)
-    ones_in.requires_grad = False
-    var b_in = nn.matmul(b_in_flat,ones_in)
+#     var b_in_flat = nn.tensor(shape(d_mlp,1))
+#     var ones_in = nn.tensor(shape(1,seq_len))
+#     ones_in.fill(1)
+#     ones_in.requires_grad = False
+#     var b_in = nn.matmul(b_in_flat,ones_in)
 
-    var W_out = nn.tensor(shape(d_Model,d_mlp))
-    W_out.randn(init_std)
+#     var W_out = nn.tensor(shape(d_Model,d_mlp))
+#     W_out.randn(init_std)
 
-    var b_out_flat = nn.tensor(shape(d_Model,1))
-    var ones_out = nn.tensor(shape(1,seq_len))
-    ones_out.fill(1)
-    ones_out.requires_grad = False
-    var b_out = nn.matmul(b_out_flat,ones_out)
+#     var b_out_flat = nn.tensor(shape(d_Model,1))
+#     var ones_out = nn.tensor(shape(1,seq_len))
+#     ones_out.fill(1)
+#     ones_out.requires_grad = False
+#     var b_out = nn.matmul(b_out_flat,ones_out)
 
-    # architecture
-    x = nn.matmul(W_in, x_t)     # batch_size,d_mlp,seq_len
-    x = nn.add(x,b_in)        # batch_size,d_mlp,seq_len
-    x = nn.relu(x)            # batch_size,d_mlp,seq_len
-    x = nn.matmul(W_out,x)       # batch_size,d_Model,seq_len
-    x = nn.add(x,b_out)       # batch_size,d_Model,seq_len
-    return nn.transpose(x)    # batch_size,seq_len,d_model = shape(input)
+#     # architecture
+#     x = nn.matmul(W_in, x_t)     # batch_size,d_mlp,seq_len
+#     x = nn.add(x,b_in)        # batch_size,d_mlp,seq_len
+#     x = nn.relu(x)            # batch_size,d_mlp,seq_len
+#     x = nn.matmul(W_out,x)       # batch_size,d_Model,seq_len
+#     x = nn.add(x,b_out)       # batch_size,d_Model,seq_len
+#     return nn.transpose(x)    # batch_size,seq_len,d_model = shape(input)
+
 
 
 fn transformer_block(inout nn: Module, d_Model: Int, num_heads: Int, d_head: Int, n_ctx: Int, d_mlp: Int, batch_size: Int, seq_len: Int, use_attn: Bool, use_mlp: Bool, init_std: Float32, inout x: Tensor) -> Tensor:
-    var res_stream = nn.copy(x)
-    if(use_attn):
-        x = attention(
-            nn=nn,
-            d_Model=d_Model,
-            num_heads=num_heads,
-            d_head=d_head,
-            n_ctx=seq_len,
-            batch_size=batch_size,
-            seq_len=seq_len,
-            init_std=init_std,
-            x=x
-        )
-    if(use_mlp):
-        x = mlp(
-            nn=nn,
-            d_Model=d_Model,
-            d_mlp=d_mlp,
-            batch_size=batch_size,
-            seq_len=seq_len,
-            init_std=init_std,
-            x=x
-        )
-    return nn.add(res_stream,x)
+    pass
+    # var res_stream = nn.copy(x)
+    # if(use_attn):
+    #     x = attention(
+    #         nn=nn,
+    #         d_Model=d_Model,
+    #         num_heads=num_heads,
+    #         d_head=d_head,
+    #         n_ctx=seq_len,
+    #         batch_size=batch_size,
+    #         seq_len=seq_len,
+    #         init_std=init_std,
+    #         x=x
+    #     )
+    # if(use_mlp):
+    #     x = mlp(
+    #         nn=nn,
+    #         d_Model=d_Model,
+    #         d_mlp=d_mlp,
+    #         batch_size=batch_size,
+    #         seq_len=seq_len,
+    #         init_std=init_std,
+    #         x=x
+    #     )
+    # return nn.add(res_stream,x)
