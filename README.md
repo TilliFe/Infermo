@@ -9,13 +9,10 @@ Infermo is a Mojo library that provides two high-level features:
 Mojo currently operates on CPU only. GPU support will come soon! Infermo is currently still a Proof-of-Concept, if you encounter any bugs, feel free to create an issue or a PR. Thank you for your contribution.
 
 
-With GitHub, I usually insert a blockquote.
+> **_New:_** Infermo just got a major upgrade, going from a static computation graph to a fully dynamic one!🤸‍♀️ 
 
-> **_New:_** Infermo just got a major upgrade, going from a static computation graph to a fully dynamic one!🔥 
-The example architectures in the repo (e.g. the transformer) still need to be adopted to the new programming style.
-
-## Available Operators
-The operators listed below are methods of the `Module` class, which orchestrates both forward and backward computations. Each operator accepts one or two `Tensor` objects as input. All binary operators accept differently shaped Tensors via broadcasting.
+## Available operators
+The operators listed below are methods of the `Module` class, which the gradient computation. Each operator accepts one or two `Tensor` objects as input. All binary operators accept differently shaped Tensors via broadcasting. The result of each operation is only temporarily stored as part of the dynamic computation graph. Call the `clear_cache` method, in order to clear all temporarily stored results of the graph.
 
 - **matmul**: Performs matrix multiplication of two tensors.
 - **conv_2d**: Applies a 2D convolution over an input signal composed of several input planes.
@@ -44,18 +41,20 @@ The operators listed below are methods of the `Module` class, which orchestrates
 - **relu**: Applies the rectified linear unit function element-wise. 
 - **copy**: Performs a deep copy of the input Tensor.
 
-## Advanced Operators
+## Advanced submodules
 
-- **linear**: This operator represents a dense layer of neurons. 
-- **mlp**: Similar to the dense operator, but specifically tailored for use within a transformer block.
-- **conv2d**: Executes a convolution operation with a specified tensor and adds a bias if necessary.
-- **transformer_block, embed, unembed, pos_embed**: These are the fundamental building blocks of a Transformer model.
+Submodules are abstractions of more complex computations. Each submodule has its own `forward` method which returns a Tensor.
+
+- **Linear**: This submodule represents a dense layer of neurons. 
+- **Mlp**: Similar to the dense layer, but specifically tailored for use within a transformer block.
+- **Conv2d**: Executes a convolution operation with a specified tensor and adds a bias if necessary.
+- **TransformerBlock, Embed, Unembed, PosEmbed**: These are the fundamental building blocks of a Transformer model.
 - **DataLoader**: A utility for handling data. It reads, initializes, and loads data from a given .txt file. (TODO: dataset splitting, read from csv)
 
 
-## Example Code
+## Example code
 
-### Train a Neural Network on the **MNIST** dataset
+### Train a neural network on the **MNIST** dataset
 
 Import the necessary parts from Infermo
 
@@ -152,7 +151,7 @@ fn main() raises:
             avg_acc = 0
 ```
 
-### Simple Example
+### Super simple example
 
 If that was a bit too much, here is a simpler example of a basic multiplication between two tensors and their respective gradient computation.
 
@@ -162,7 +161,7 @@ from infermo import Module, Tensor, shape
 fn main():
     # init
     var nn = Module()
-    var a = nn.tensor(shape(2,2,2,3))
+    var a = nn.tensor(shape(2,3))
     var b = nn.tensor(shape(2,2,3,4))
 
     # specify tensor entries
