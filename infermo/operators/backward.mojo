@@ -9,6 +9,7 @@ from math import max, min, sqrt, abs, pow, exp2, exp, log2, log, cos, sin, tan, 
 from sys.param_env import env_get_int
 
 from ..graph.tensor import Tensor
+from .forward import mean
 
 alias nelts = simdwidthof[DType.float32]()
 alias workers = env_get_int["WORKERS", 0]()
@@ -469,7 +470,36 @@ fn mean_grad(b: Tensor, inout a: Tensor):
 
 @always_inline
 fn variance_grad(b: Tensor, inout a: Tensor): 
-    pass
+    # 2(xi - mu) / (N - 1), where xi is each value of data in a tensor (parent tensor)
+    let dim_len: Int = b.other_params.load(0)
+ 
+    var b_dims = DynamicVector[Int](0)
+    for d in range(b.num_dims):
+        b_dims.push_back(b.shape[d])
+    var mean_output = Tensor(b_dims)
+    mean_output.other_params = b.other_params
+
+    # Calculate total number of elements in dims
+    var total_elements_in_dims: Int = 1
+    for d in range(dim_len):
+        let dim: Int = b.other_params.load(d+1)
+        total_elements_in_dims *= a.shape[dim]
+
+    # Calculate the mean of the tensor
+    mean(mean_output, a)
+
+    @parameter
+    fn _variance_grad[_nelts: Int](idx_b: Int, idx_a: Int):
+        a.grad.simd_store[_nelts](
+            idx_a, a.grad.simd_load[_nelts](idx_a) + 
+            (
+                2 * (a.data.simd_load[_nelts](idx_a) - mean_output.data.load(idx_b))
+             / (total_elements_in_dims - 1)
+             ) 
+            * b.grad.load(idx_b)
+        )
+
+    expand_unary_operation_iterator[_variance_grad](b, a)
 
 @always_inline
 fn std_grad(b: Tensor, inout a: Tensor): 
