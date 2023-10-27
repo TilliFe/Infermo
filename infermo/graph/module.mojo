@@ -476,6 +476,7 @@ struct Module:
 
         return b
 
+    @always_inline
     fn mean(inout self, inout a: Tensor, *dims: Int) -> Tensor:
         # A hack until traits are added
         @parameter
@@ -484,6 +485,7 @@ struct Module:
 
         return self.__mean(a, len(VariadicList(dims)), index_iterator)
 
+    @always_inline
     fn mean(inout self, inout a: Tensor, dims: DynamicVector[Int]) -> Tensor:
         @parameter
         fn index_iterator(idx: Int) -> Int:
@@ -527,6 +529,7 @@ struct Module:
 
         return b
 
+    @always_inline
     fn variance(inout self, inout a: Tensor, *dims: Int) -> Tensor:
         # A hack until traits are added
         @parameter
@@ -535,6 +538,7 @@ struct Module:
 
         return self.__variance(a, len(VariadicList(dims)), index_iterator)
 
+    @always_inline
     fn variance(inout self, inout a: Tensor, dims: DynamicVector[Int]) -> Tensor:
         @parameter
         fn index_iterator(idx: Int) -> Int:
@@ -579,20 +583,45 @@ struct Module:
         return b
 
     @always_inline
-    fn std(inout self, inout a: Tensor, dim: DynamicVector[Int]) -> Tensor:
+    fn std(inout self, inout a: Tensor, *dims: Int) -> Tensor:
+        # A hack until traits are added
+        @parameter
+        fn index_iterator(idx: Int) -> Int:
+            return dims[idx]
+
+        return self.__std(a, len(VariadicList(dims)), index_iterator)
+
+    @always_inline
+    fn std(inout self, inout a: Tensor, dims: DynamicVector[Int]) -> Tensor:
+        @parameter
+        fn index_iterator(idx: Int) -> Int:
+            return dims[idx]
+
+        return self.__std(a, len(dims), index_iterator)
+
+    @always_inline
+    fn __std(
+        inout self,
+        inout a: Tensor,
+        len_dim: Int,
+        dim_iterator: fn (Int) capturing -> Int,
+    ) -> Tensor:
         var new_shape = DynamicVector[Int]()
         for i in range(a.num_dims):
             new_shape.push_back(a.shape[i])
 
-        for i in range(len(dim)):
-            new_shape[dim[i]] = 1
-
+        for i in range(len_dim):
+            new_shape[dim_iterator(i)] = 1
         var b = Tensor(new_shape)
 
         # pass the dim list to the result tensor as otherParams
-        b.other_params.store(0, len(dim))  # store the num of dims first
-        for i in range(len(dim)):
-            b.other_params.store(i + 1, dim[i])
+        b.other_params.store(0, len_dim)  # store the num of dims first
+        for i in range(len_dim):
+            b.other_params.store(i + 1, dim_iterator(i))
+
+        # The optimized implementation of reduce_unary_operations needs the dimensions sorted to work, from the first dimension (0) to the last (n)
+        var sort_dims = b.other_params.offset(1)
+        sort(sort_dims, len_dim)
 
         b.set_name("std")
 
