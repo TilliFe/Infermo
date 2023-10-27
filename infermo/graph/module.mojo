@@ -1,6 +1,5 @@
-from memory import memset_zero, memcpy
 from memory.unsafe import Pointer
-from memory import memset_zero, memcpy, memset
+from memory import memset_zero, memcpy
 from random import rand
 from runtime.llcl import Runtime
 from time import now
