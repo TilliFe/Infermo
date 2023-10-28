@@ -9,6 +9,7 @@ from math import max, min, sqrt, abs, pow, exp2, exp, log2, log, cos, sin, tan, 
 from sys.param_env import env_get_int
 
 from ..graph.tensor import Tensor
+from .forward import mean
 
 alias nelts = simdwidthof[DType.float32]()
 alias workers = env_get_int["WORKERS", 0]()
@@ -391,15 +392,114 @@ fn transpose_grad(b: Tensor, inout a: Tensor):
 
             vectorize[nelts, v_transpose](N)
 
+@always_inline
+fn expand_unary_operation_iterator[op: fn[_nelts: Int](Int, Int) capturing -> None](b: Tensor, inout a: Tensor):
+    let dim_len: Int = b.other_params.load(0)
+    # Calculate total number of elements in dims
+    var total_elements_in_dims: Int = 1
+    for d in range(dim_len):
+        let dim: Int = b.other_params.load(d+1)
+        total_elements_in_dims *= a.shape[dim]
+    
+    # Mark which dimensions are we going to expand
+    var in_dims = DynamicVector[Bool](b.num_dims)
+    for d in range(b.num_dims):
+        in_dims[d] = False
+    for d in range(dim_len):
+        in_dims[b.other_params.load(d+1)] = True
+
+
+    let last_dim = b.other_params.load(dim_len)
+    let last_dim_size = a.shape[last_dim]
+    let last_stride = a.strides[last_dim]
+
+    @parameter
+    fn p_op(i: Int):
+        var indeces = DynamicVector[Int]()
+        var offset_a = 0
+        # Calculate offset of a tensor, based on the position of b tensor
+        for dim in range(a.num_dims - 1, -1, -1):
+            if not in_dims[dim]:
+                offset_a += ((i // b.strides[dim]) % b.shape[dim]) * a.strides[dim]
+            indeces.push_back(0)
+
+        for j in range(total_elements_in_dims // last_dim_size):
+            @parameter
+            fn v_op[nelts: Int](k: Int):
+                let offset_a_local = offset_a + k * last_stride
+                
+                op[nelts](i, offset_a_local) # do expand operation
+
+            vectorize[nelts, v_op](last_dim_size)
+
+            # Increment indeces of a tensor minus the last dimension, because we iterate over the last dimension in the inner loop k (the size loop)
+            var count = 0
+            for dim in range(a.num_dims - 1, -1, -1):
+                if in_dims[dim] and count == 0:
+                    count += 1
+                    continue
+                if not in_dims[dim]:
+                    continue
+                indeces[dim] += 1
+                offset_a += a.strides[dim]
+                if indeces[dim] < a.shape[dim]:
+                    break
+                indeces[dim] = 0
+                offset_a -= a.strides[dim] * a.shape[dim]
+
+    parallelize[p_op](b.cap, 1)
 
 @always_inline
 fn mean_grad(b: Tensor, inout a: Tensor): 
-    pass
+    let dim_len: Int = b.other_params.load(0)
+    # Calculate total number of elements in dims
+    var total_elements_in_dims: Int = 1
+    for d in range(dim_len):
+        let dim: Int = b.other_params.load(d+1)
+        total_elements_in_dims *= a.shape[dim]
+    
+    let local_grad = Float32(1) / Float32(total_elements_in_dims) # local derivative (1/N) * 1
 
+    @parameter
+    fn _mean_grad[_nelts: Int](idx_b: Int, idx_a: Int):
+        a.grad.simd_store[_nelts](
+            idx_a, a.grad.simd_load[_nelts](idx_a) + local_grad * b.grad.load(idx_b)
+        )
+
+    expand_unary_operation_iterator[_mean_grad](b, a)
 
 @always_inline
 fn variance_grad(b: Tensor, inout a: Tensor): 
-    pass
+    # 2(xi - mu) / (N - 1), where xi is each value of data in a tensor (parent tensor)
+    let dim_len: Int = b.other_params.load(0)
+ 
+    var b_dims = DynamicVector[Int](0)
+    for d in range(b.num_dims):
+        b_dims.push_back(b.shape[d])
+    var mean_output = Tensor(b_dims)
+    mean_output.other_params = b.other_params
+
+    # Calculate total number of elements in dims
+    var total_elements_in_dims: Int = 1
+    for d in range(dim_len):
+        let dim: Int = b.other_params.load(d+1)
+        total_elements_in_dims *= a.shape[dim]
+
+    # Calculate the mean of the tensor
+    mean(mean_output, a)
+
+    @parameter
+    fn _variance_grad[_nelts: Int](idx_b: Int, idx_a: Int):
+        a.grad.simd_store[_nelts](
+            idx_a, a.grad.simd_load[_nelts](idx_a) + 
+            (
+                2 * (a.data.simd_load[_nelts](idx_a) - mean_output.data.load(idx_b))
+             / (total_elements_in_dims - 1)
+             ) 
+            * b.grad.load(idx_b)
+        )
+
+    expand_unary_operation_iterator[_variance_grad](b, a)
 
 @always_inline
 fn std_grad(b: Tensor, inout a: Tensor): 
