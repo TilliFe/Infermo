@@ -394,7 +394,20 @@ fn transpose_grad(b: Tensor, inout a: Tensor):
 
 @always_inline
 fn mean_grad(b: Tensor, inout a: Tensor): 
-    pass
+    let dim_len: Int = b.other_params.load(0)
+    
+    # Calculate total number of elements in dims
+    var total_elements_in_dims: Int = 1
+    for d in range(dim_len):
+        let dim: Int = b.other_params.load(d + 1)
+        total_elements_in_dims *= a.shape[dim]
+
+    # Compute the gradient of the mean
+    let mean_grad_value: Float32 = 1.0 / Float32(total_elements_in_dims)
+
+    # Update the input tensor 'a' with the computed gradients
+    for i in range(a.cap):
+        a.data.store(i, mean_grad_value)
 
 
 @always_inline
