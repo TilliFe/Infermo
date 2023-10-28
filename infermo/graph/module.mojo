@@ -695,13 +695,10 @@ struct Module:
         let diff = a.num_dims - b.num_dims
         for i in range(new_num_dims):
             if diff > 0 and i < abs(diff):
-                print(1)
                 new_shape.push_back(a.shape[i])
             elif diff < 0 and i < abs(diff):
-                print(2)
                 new_shape.push_back(b.shape[i])
             else:
-                print(3)
                 new_shape.push_back(max(a.shape[i], b.shape[i]))
 
         var c = Tensor(new_shape)

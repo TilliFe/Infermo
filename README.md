@@ -6,13 +6,11 @@ Infermo is a Mojo library that provides two high-level features:
 - Tensor computation
 - Deep neural networks built on a tape-based autograd system
 
-Mojo currently operates on CPU only. GPU support will come soon! Infermo is currently still a Proof-of-Concept, if you encounter any bugs, feel free to create an issue or a PR. Thank you for your contribution.
+Mojo currently operates on CPU only. GPU support will come soon! Infermo is currently still a Proof-of-Concept, if you encounter any bugs, feel free to create an issue or a PR. Thank you for your contribution. :)
 
-
-> **_New:_** Infermo just got a major upgrade, going from a static computation graph to a fully dynamic one!🤸‍♀️ 
 
 ## Available operators
-The operators listed below are methods of the `Module` class, which the gradient computation. Each operator accepts one or two `Tensor` objects as input. All binary operators accept differently shaped Tensors via broadcasting. The result of each operation is only temporarily stored as part of the dynamic computation graph. Call the `clear_cache` method, in order to clear all temporarily stored results of the graph.
+The operators listed below are methods of the `Module` class, which orchestrates the gradient computation. Each operator accepts one or two `Tensor` objects as input. All binary operators accept differently shaped Tensors via broadcasting. The result of each operation is only temporarily stored as part of the dynamic computation graph. Call the `clear_cache` method, in order to clear all temporarily stored results of the graph.
 
 - **matmul**: Performs matrix multiplication of two tensors.
 - **conv_2d**: Applies a 2D convolution over an input signal composed of several input planes.
@@ -23,8 +21,8 @@ The operators listed below are methods of the `Module` class, which the gradient
 - **ce**: Computes cross entropy loss, often used for classification problems.
 - **reshape**: Returns a tensor with the same data and number of elements as input, but with the specified shape.
 - **transpose**: Transposes a Tensor along the last two dimensions.
-- **mean**: Computes the mean value along a list of dimensions. (TODO: backward)
-- **variance**: Computes the variance value along a list of dimensions. (TODO: backward)
+- **mean**: Computes the mean value along a list of dimensions.
+- **variance**: Computes the variance value along a list of dimensions.
 - **std**: Computes the standard deviation along a list of dimensions. (TODO: backward)
 - **mul**: Performs element-wise multiplication of two tensors.
 - **add**: Performs element-wise addition of two tensors.
@@ -48,7 +46,7 @@ Submodules are abstractions of more complex computations. Each submodule has its
 - **Linear**: This submodule represents a dense layer of neurons. 
 - **Mlp**: Similar to the dense layer, but specifically tailored for use within a transformer block.
 - **Conv2d**: Executes a convolution operation with a specified tensor and adds a bias if necessary.
-- **TransformerBlock, Embed, Unembed, PosEmbed**: These are the fundamental building blocks of a Transformer model.
+- **TransformerBlock, Embed, Unembed, PosEmbed**: These are the fundamental building blocks of a Transformer model. (Currently under construction)
 - **DataLoader**: A utility for handling data. It reads, initializes, and loads data from a given .txt file. (TODO: dataset splitting, read from csv)
 
 
@@ -59,7 +57,7 @@ Submodules are abstractions of more complex computations. Each submodule has its
 Import the necessary parts from Infermo
 
 ```python
-from infermo import Module, Tensor, shape, linear, max, accuracy
+from infermo import Module, Tensor, shape, Linear, max, accuracy
 ```
 
 Define the Model architecture (simple mlp with relu activations and biases)
