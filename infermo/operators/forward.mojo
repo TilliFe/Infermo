@@ -315,152 +315,142 @@ fn transpose(inout b: Tensor, a: Tensor):
             vectorize[nelts, v_transpose](N)
 
 @always_inline
-fn mean(inout b: Tensor, a: Tensor): 
+fn reduce_unary_operation_iterator[op: fn[_nelts: Int](Int, Int) capturing -> None, op_b: fn(Int) capturing -> None](inout b: Tensor, a: Tensor):
     let dim_len: Int = b.other_params.load(0)
-    
     # Calculate total number of elements in dims
     var total_elements_in_dims: Int = 1
     for d in range(dim_len):
         let dim: Int = b.other_params.load(d+1)
         total_elements_in_dims *= a.shape[dim]
-
+    
+    # Mark which dimensions are we going to reduce
     var in_dims = DynamicVector[Bool](b.num_dims)
     for d in range(b.num_dims):
         in_dims[d] = False
     for d in range(dim_len):
         in_dims[b.other_params.load(d+1)] = True
 
-    # Iterate over all elements in the tensor
-    for i in range(a.cap):
-        var indeces = DynamicVector[Int]()
-        for dim in range(a.num_dims):
-            indeces.push_back((i // a.strides[dim]) % a.shape[dim])
-        var output_index = 0
-        for dim in range(b.num_dims):
-            if not in_dims[dim]:
-                output_index += indeces[dim] * b.strides[dim]
-            
-        b.data.store(output_index, b.data.load(output_index) + a.data.load(i))
 
-    # Divide each element in output tensor by total number of elements in dims
-    for i in range(b.cap):
-        let value: Float32 = b.data.load(i) / Float32(total_elements_in_dims)
-        b.data.store(i, value)
+    let last_dim = b.other_params.load(dim_len)
+    let last_dim_size = a.shape[last_dim]
+    let last_stride = a.strides[last_dim]
+
+    @parameter
+    fn p_op(i: Int):
+        var indeces = DynamicVector[Int]()
+        var offset_a = 0
+        # Calculate offset of a tensor, based on the position of b tensor
+        for dim in range(a.num_dims - 1, -1, -1):
+            if not in_dims[dim]:
+                offset_a += ((i // b.strides[dim]) % b.shape[dim]) * a.strides[dim]
+            indeces.push_back(0)
+
+        for j in range(total_elements_in_dims // last_dim_size):
+            @parameter
+            fn v_op[nelts: Int](k: Int):
+                let offset_a_local = offset_a + k * last_stride
+                
+                op[nelts](i, offset_a_local) # do reduce operation
+
+            vectorize[nelts, v_op](last_dim_size)
+
+            # Increment indeces of a tensor minus the last dimension, because we iterate over the last dimension in the inner loop k (the size loop)
+            var count = 0
+            for dim in range(a.num_dims - 1, -1, -1):
+                if in_dims[dim] and count == 0:
+                    count += 1
+                    continue
+                if not in_dims[dim]:
+                    continue
+                indeces[dim] += 1
+                offset_a += a.strides[dim]
+                if indeces[dim] < a.shape[dim]:
+                    break
+                indeces[dim] = 0
+                offset_a -= a.strides[dim] * a.shape[dim]
+
+        op_b(i) # Final operation on the result of the reduction in tensor b
+
+    parallelize[p_op](b.cap, workers if workers > 0 else b.cap)
+
+@always_inline
+fn mean(inout b: Tensor, a: Tensor):
+    let dim_len: Int = b.other_params.load(0)
+    # Calculate total number of elements in dims
+    var total_elements_in_dims: Int = 1
+    for d in range(dim_len):
+        let dim: Int = b.other_params.load(d+1)
+        total_elements_in_dims *= a.shape[dim]
+
+    @parameter
+    fn _sum[nelts: Int](idx_b: Int, idx_a: Int):
+        b.data.store(idx_b, b.data.load(idx_b) + a.data.simd_load[nelts](idx_a).reduce_add())
+
+    @parameter
+    fn _mean(idx_b: Int):
+        b.data.store(idx_b, b.data.load(idx_b) / Float32(total_elements_in_dims))
+
+    reduce_unary_operation_iterator[_sum, _mean](b, a)
 
 
 @always_inline
 fn variance(inout b: Tensor, a: Tensor): 
-
     let dim_len: Int = b.other_params.load(0)
-    let mean_output = DTypePointer[DType.float32].alloc(b.cap)
-    memset_zero(mean_output, b.cap)
-    
+    var b_dims = DynamicVector[Int](0)
+    for d in range(b.num_dims):
+        b_dims.push_back(b.shape[d])
+    var mean_output = Tensor(b_dims)
+    mean_output.other_params = b.other_params
+
     # Calculate total number of elements in dims
     var total_elements_in_dims: Int = 1
     for d in range(dim_len):
         let dim: Int = b.other_params.load(d+1)
         total_elements_in_dims *= a.shape[dim]
-
-    var in_dims = DynamicVector[Bool](b.num_dims)
-    for d in range(b.num_dims):
-        in_dims[d] = False
-    for d in range(dim_len):
-        in_dims[b.other_params.load(d+1)] = True
-
-    # Iterate over all elements in the tensor
-    for i in range(a.cap):
-        var indeces = DynamicVector[Int]()
-        for dim in range(a.num_dims):
-            indeces.push_back((i // a.strides[dim]) % a.shape[dim])
-
-        var output_index = 0
-        for dim in range(b.num_dims):
-            if not in_dims[dim]:
-                output_index += indeces[dim] * b.strides[dim]
-        
-        mean_output.store(output_index, mean_output.load(output_index) + a.data.load(i))
-
-    # Divide each element in output tensor by total number of elements in dims
-    for i in range(b.cap):
-        let value: Float32 = mean_output.load(i) / Float32(total_elements_in_dims)
-        mean_output.store(i, value)
     
-    # Iterate over all elements in the tensor again to calculate squared differences from the mean
-    for i in range(a.cap):
-        var indeces = DynamicVector[Int]()
-        for dim in range(a.num_dims):
-            indeces.push_back((i // a.strides[dim]) % a.shape[dim])
+    # Calculate the mean of the tensor
+    mean(mean_output, a)
+    
+    @parameter
+    fn _diff[nelts: Int](idx_b: Int, idx_a: Int):
+        let diff = a.data.simd_load[nelts](idx_a) - mean_output.data.load(idx_b)
+        b.data.store(idx_b, b.data.load(idx_b) + (diff ** 2).reduce_add())
 
-        var output_index = 0
-        for dim in range(b.num_dims):
-            if not in_dims[dim]:
-                output_index += indeces[dim] * b.strides[dim]
-        
-        let diff = a.data.load(i) - mean_output.load(output_index)
-        b.data.store(output_index, b.data.load(output_index) + diff * diff)
+    @parameter
+    fn _variance(idx_b: Int):
+        b.data.store(idx_b, b.data.load(idx_b) / Float32(total_elements_in_dims - 1)) # / (n - 1)
 
-    # Divide each element in squared_diff_output tensor by total number of elements in dims to get the variance
-    for i in range(b.cap):
-        let value: Float32 = b.data.load(i) / Float32(total_elements_in_dims - 1)
-        b.data.store(i, value) 
-
-
+    reduce_unary_operation_iterator[_diff, _variance](b, a)
 
 @always_inline
 fn std(inout b: Tensor, a: Tensor): 
-
+    """Population standard deviation."""
     let dim_len: Int = b.other_params.load(0)
-    let mean_output = DTypePointer[DType.float32].alloc(b.cap)
-    memset_zero(mean_output, b.cap)
-    
+    var b_dims = DynamicVector[Int](0)
+    for d in range(b.num_dims):
+        b_dims.push_back(b.shape[d])
+    var mean_output = Tensor(b_dims)
+    mean_output.other_params = b.other_params
+
     # Calculate total number of elements in dims
     var total_elements_in_dims: Int = 1
     for d in range(dim_len):
         let dim: Int = b.other_params.load(d+1)
         total_elements_in_dims *= a.shape[dim]
-
-    var in_dims = DynamicVector[Bool](b.num_dims)
-    for d in range(b.num_dims):
-        in_dims[d] = False
-    for d in range(dim_len):
-        in_dims[b.other_params.load(d+1)] = True
-
-    # Iterate over all elements in the tensor
-    for i in range(a.cap):
-        var indeces = DynamicVector[Int]()
-        for dim in range(a.num_dims):
-            indeces.push_back((i // a.strides[dim]) % a.shape[dim])
-
-        var output_index = 0
-        for dim in range(b.num_dims):
-            if not in_dims[dim]:
-                output_index += indeces[dim] * b.strides[dim]
-        
-        mean_output.store(output_index, mean_output.load(output_index) + a.data.load(i))
-
-    # Divide each element in output tensor by total number of elements in dims
-    for i in range(b.cap):
-        let value: Float32 = mean_output.load(i) / Float32(total_elements_in_dims)
-        mean_output.store(i, value)
     
-    # Iterate over all elements in the tensor again to calculate squared differences from the mean
-    for i in range(a.cap):
-        var indeces = DynamicVector[Int]()
-        for dim in range(a.num_dims):
-            indeces.push_back((i // a.strides[dim]) % a.shape[dim])
+    # Calculate the mean of the tensor
+    mean(mean_output, a)
+    
+    @parameter
+    fn _diff[nelts: Int](idx_b: Int, idx_a: Int):
+        let diff = a.data.simd_load[nelts](idx_a) - mean_output.data.load(idx_b)
+        b.data.store(idx_b, b.data.load(idx_b) + (diff ** 2).reduce_add())
 
-        var output_index = 0
-        for dim in range(b.num_dims):
-            if not in_dims[dim]:
-                output_index += indeces[dim] * b.strides[dim]
-        
-        let diff = a.data.load(i) - mean_output.load(output_index)
-        b.data.store(output_index, b.data.load(output_index) + diff * diff)
+    @parameter
+    fn _std(idx_b: Int):
+        b.data.store(idx_b, sqrt(b.data.load(idx_b) / Float32(total_elements_in_dims - 1))) # / (n - 1)
 
-    # Divide each element in squared_diff_output tensor by total number of elements in dims to get the variance
-    for i in range(b.cap):
-        let value: Float32 = sqrt(b.data.load(i) / Float32(total_elements_in_dims - 1))
-        b.data.store(i, value) 
+    reduce_unary_operation_iterator[_diff, _std](b, a)
 
 
 # elementwise operators ####################################################
