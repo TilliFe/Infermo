@@ -503,7 +503,27 @@ fn variance_grad(b: Tensor, inout a: Tensor):
 
 @always_inline
 fn std_grad(b: Tensor, inout a: Tensor): 
-    pass
+    let dim_len: Int = b.other_params.load(0)
+ 
+    var b_dims = DynamicVector[Int](0)
+    for d in range(b.num_dims):
+        b_dims.push_back(b.shape[d])
+    var mean_output = Tensor(b_dims)
+    mean_output.other_params = b.other_params
+
+    # Calculate the gradient of the variance first
+    variance_grad(b, a)
+    
+    @parameter
+    fn _std_grad[_nelts: Int](idx_b: Int, idx_a: Int):
+        # Chain rule to calculate gradient
+        let std_derivative = 0.5 / sqrt(b.data.load(idx_b)) # 1/2 * 1/sqrt(variance)
+        a.grad.simd_store[_nelts](
+            idx_a, a.grad.simd_load[_nelts](idx_a) + std_derivative * b.grad.load(idx_b)
+        )
+
+    expand_unary_operation_iterator[_std_grad](b, a)
+
 
 
 # elementwise operators #####################################################################################################
