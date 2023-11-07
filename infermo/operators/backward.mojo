@@ -519,7 +519,7 @@ fn std_grad(b: Tensor, inout a: Tensor):
         # Chain rule to calculate gradient
         let std_derivative = 0.5 / sqrt(b.data.load(idx_b)) # 1/2 * 1/sqrt(variance)
         a.grad.simd_store[_nelts](
-            idx_a, a.grad.simd_load[_nelts](idx_a) * std_derivative * b.grad.load(idx_b)
+            idx_a, a.grad.simd_load[_nelts](idx_a) + std_derivative * b.grad.load(idx_b)
         )
 
     expand_unary_operation_iterator[_std_grad](b, a)
