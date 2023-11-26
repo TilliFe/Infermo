@@ -12,7 +12,7 @@ Infermo is still a Proof-of-Concept, if you encounter any bugs, feel free to cre
 
 ## A tiny Example
 ```python
-# lets 's build a simple neural network that learns to approximate sin(15x)
+# lets's build a simple neural network that learns to approximate sin(15x)
 fn main() raises:
 
     # init params
