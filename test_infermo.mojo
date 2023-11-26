@@ -1,18 +1,11 @@
-# Infermo🔥
+# from autograd import Tensor, add, sin, relu
+from autograd import Tensor, cos, sin, tan, relu, mse, cross_entropy, softmax, tanh, add, sub, mul, div, pow, mmul, sum, log, exp, sqrt, abs, reshape, transpose
+from autograd.utils.shape import shape
 
-### Tensors and dynamic Neural Networks in pure Mojo
+##################################################################################################################
+# main function: Testing functionality of the Engine...
+##################################################################################################################
 
-Infermo is a Mojo library that provides two high-level features:
-- Tensor computation
-- Automatic Differentiation
-
-Mojo currently operates on CPU only. GPU support will come soon! 
-
-Infermo is still a Proof-of-Concept, if you encounter any bugs, feel free to create an issue or a PR. Thank you for your contribution. 😊
-
-## A tiny Example
-```python
-# lets 's build a simple neural network that learns to approximate sin(15x)
 fn main() raises:
 
     # init params
@@ -52,18 +45,3 @@ fn main() raises:
 
         # clear graph
         loss.clear() 
-```
-
-## Unique Feature
-- Memory Sharing
-- Gradient Checkpointing
-- Choose between static and dynamic graph execution
-
-
-## Coming soon...
-- More optimized memory management
-- GPU support
-- More operators, activiations, optimizers
-
-#### We are focusing on building the engine right before adding more features. Stay tuned for more updates!
-
