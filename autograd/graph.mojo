@@ -422,6 +422,14 @@ struct Graph:
                     self.nodes.load().store(i, Pointer[Node].get_null())
                     break
 
+        # remove duplicate memory pointers
+        for i in range(self.memory_pool.load().len.load()):
+            let array = self.memory_pool.load().load(i)
+            for j in range(i+1, self.memory_pool.load().len.load()):
+                let other = self.memory_pool.load().load(j)
+                if array == other:
+                    self.memory_pool.load().store(i, VectorF32.get_null())                
+
         # free up unused data and grad data from memory pool
         let deletable_data = Vector[Bool](self.memory_pool.load().len.load())
         for i in range(self.memory_pool.load().len.load()):
@@ -438,7 +446,7 @@ struct Graph:
                     deletable_data.store(node.load().grad_id.load(),False)
 
         for i in range(deletable_data.len.load()):
-            if (deletable_data.load(i) and not self.memory_pool.load().load(i) == VectorF32.get_null()) and not i == 13:
+            if (deletable_data.load(i) and not self.memory_pool.load().load(i) == VectorF32.get_null()):
                 self.memory_pool.load().load(i).free()  
         deletable_data.free()
                
@@ -480,13 +488,6 @@ struct Graph:
                 node_ptr.load().other_params_ptr.load().free()
                 node_ptr.load().other_params_ptr.free()
 
-                # if(i == count_back):
-                #     let node_ptr = self.nodes.load().pop_back()
-                #     node_ptr.free()
-                # else:
-                #     self.nodes.load().load(i).free()
-                #     self.nodes.load().store(i, Pointer[Node].alloc(1))
-                # count_back -= 1
                 node_ptr.free()
             else:
                 node_ptr.load().children_ptr.load().clear()
@@ -497,46 +498,10 @@ struct Graph:
                 node_ptr.load().grad_id.store(0)
 
 
-    # free all allocated memory in the memory_pool
-    fn free_memory_pool(self) raises: pass
-        # for i in range(30):
-        #     for j in range(self.memory_pool_manager.load(i).len.load()-1,-1,-1):
-        #         let data_id = self.memory_pool_manager.load(i).load(j)
-        #         self.memory_pool.load().clear()
-        #         self.free_data_ids.load().push_back(data_id)
-        #     self.memory_pool_manager.load(i).clear()
-
-    # Free the entire graph deeply, nothing will be left.
-    fn free_all(self, reset_static_nodes: Bool = False) raises: pass
-        # self.free_memory_pool()
-        # self.clear_cache(reset_static_nodes)
-        # self.nodes.load().free()
-        # self.nodes.free()
-        # self.memory_pool.load().free()
-        # self.memory_pool.free()
-        # for i in range(30):
-        #     self.memory_pool_manager.load(i).free()
-        # self.memory_pool_manager.free()
-        # self.free_node_ids.load().free()
-        # self.free_node_ids.free()
-        # self.free_data_ids.load().free()
-        # self.free_data_ids.free()
-        # self.last_node_id.free()
-
-
     # clear the graph carefully, only dynamic nodes are freed deeply, static nodes are kept alive.
     fn clear(self,reset_static_nodes: Bool = False) raises:
-        self.forward_order.load().clear()
-        var static_exists = False
-        for i in range(self.nodes.load().len.load()):
-            if(self.nodes.load().load(i).load().is_static_ptr.load()):
-                static_exists = True
-                break
-        if(static_exists):
-            self.clear_cache(reset_static_nodes)
-        else:
-            self.free_all(reset_static_nodes)
-        
+        self.clear_cache(reset_static_nodes)
+
         # free all graph related parts 
         self.nodes.load().free()
         self.nodes.free()
@@ -628,42 +593,6 @@ struct Graph:
             node.load().dependencies_ptr.store(node.load().children_ptr.load().len.load())
             
         _ = self.forward_recursive(node_ptr)   
-
-
-        # Note: Static execution on fixed graph, if no backward is used and we mermoize the forward execution, 
-        # if backward is called as well, the memory ownership is too dynamic and unpredictable, so the 
-        # recursive execution is used instead.
-        
-        # if(not self.compiled.load()):
-        #     # compute initial forward pass if not done so far
-        #     # self.clear_static_graph()
-        #     _ = self.forward_recursive(node_ptr,keep_forward_order=True)
-        #     self.last_node_id.store(node_ptr.load().load_id())
-        #     self.compiled.store(True)
-        # else:
-        #     # zero all intermediate data
-        #     # for i in range(self.nodes.load().len.load()):
-        #     #     self.zero_computed_data(self.nodes.load().load(i))
-
-        #     for i in range(self.forward_order.load().len.load()):
-        #         let node_id = self.forward_order.load().load(i)
-        #         let node_ptr = self.nodes.load().load(node_id)
-        #         let operator_id = node_ptr.load().operator_id_ptr.load()
-
-        #         if(node_ptr.load().load_num_parents() == 1):
-        #             let parent1_ptr = self.nodes.load().load(node_ptr.load().load_parent_id(0))
-        #             # if node_ptr.load().data_id.load() == -1:
-        #             self.get_free_data_ptr(node_ptr)
-        #             self.kernels.load(operator_id).get[1,unary_op]()(node_ptr.load(),parent1_ptr.load())
-
-        #         else:
-        #             let parent1_ptr = self.nodes.load().load(node_ptr.load().load_parent_id(0))
-        #             let parent2_ptr = self.nodes.load().load(node_ptr.load().load_parent_id(1))
-        #             # if node_ptr.load().data_id.load() == -1:
-        #             self.get_free_data_ptr(node_ptr)
-        #             self.kernels.load(operator_id).get[2,binary_op]()(node_ptr.load(),parent1_ptr.load(),parent2_ptr.load())
-                
-        #         node_ptr.load().computed_ptr.store(True)
 
         return self.nodes.load().load(self.last_node_id.load())
 

@@ -9,16 +9,16 @@ from autograd.utils.shape import shape
 fn main() raises:
 
     # init params
-    let W1 = Tensor(shape(1,64)).randhe().requires_grad()
-    let W2 = Tensor(shape(64,64)).randhe().requires_grad()
-    let W3 = Tensor(shape(64,1)).randhe().requires_grad()
-    let b1 = Tensor(shape(64)).randhe().requires_grad()
-    let b2 = Tensor(shape(64)).randhe().requires_grad()
+    let W1 = Tensor(shape(1,4)).randhe().requires_grad()
+    let W2 = Tensor(shape(4,4)).randhe().requires_grad()
+    let W3 = Tensor(shape(4,1)).randhe().requires_grad()
+    let b1 = Tensor(shape(4)).randhe().requires_grad()
+    let b2 = Tensor(shape(4)).randhe().requires_grad()
     let b3 = Tensor(shape(1)).randhe().requires_grad()
 
     # training
     var avg_loss = Float32(0.0)
-    let every = 1000
+    let every = 20000
     let num_epochs = 1000000
 
     for epoch in range(1,num_epochs+1):
@@ -38,10 +38,11 @@ fn main() raises:
         if epoch%every == 0:
             print("Epoch:",epoch," Avg Loss: ",avg_loss/every)
             avg_loss = 0.0   
-
-        # compute gradients and optimize
-        loss.backward()
-        loss.optimize(0.01,"sgd")
+       
+        # # compute gradients and optimize
+        # loss.backward()
+        # loss.optimize(0.01,"sgd")
 
         # clear graph
         loss.clear() 
+        input.free()

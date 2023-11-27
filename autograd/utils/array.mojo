@@ -3,7 +3,7 @@
 ##################################################################################################################
 
 # Imports
-from memory import memset_zero
+from memory import memset_zero, memcpy
 alias nelts = simdwidthof[DType.float32]()
 
 
@@ -34,7 +34,7 @@ struct Vector[type: AnyType]:
             cap: cap
         }
 
-    # Note: Copying and freeing memory such that a push_back and pop_back has amortized constant comlecity
+    # Note: Copying and freeing memory such that a push_back and pop_back has amortized constant complexity
     fn push_back(self, elem: type):
         if(self.len.load() == self.cap.load()):
             let old_data = self.data.load()

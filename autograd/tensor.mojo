@@ -156,25 +156,17 @@ struct Tensor:
                     fuse_graphs(new_tensor.graph_ptr,self.graph_ptr,True)
                     path = 4
 
-        # manually delete pointers, this does not do anything, why?
-        # if path == 1:
-        #     other.graph_ptr.free()
-        #     other.node_ptr.free()
-        # elif path == 2:
-        #     self.graph_ptr.free()
-        #     self.node_ptr.free()
-        # elif path == 3:
-        #     other.graph_ptr.load().free()
-        #     self.graph_ptr.free()
-        #     self.node_ptr.free()
-        #     other.graph_ptr.free()
-        #     other.node_ptr.free()
-        # elif path == 4:
-        #     self.graph_ptr.load().free()
-        #     self.graph_ptr.free()
-        #     self.node_ptr.free()
-        #     other.graph_ptr.free()
-        #     other.node_ptr.free()
+        # manually delete pointers
+        if path == 3:
+            self.graph_ptr.free()
+            # self.node_ptr.free()
+            other.graph_ptr.load().free()
+            other.graph_ptr.free()
+        elif path == 4:
+            self.graph_ptr.load().free()
+            self.graph_ptr.free()
+            # self.node_ptr.free()
+            other.graph_ptr.free()
 
         return new_tensor
 
@@ -192,9 +184,9 @@ struct Tensor:
             path = 1
 
         # manually delete pointers, this does not do anything, why?
-        # if(path == 1):
-        #     self.graph_ptr.free()
-        #     self.node_ptr.free()
+        if(path == 1):
+            self.graph_ptr.free()
+            # self.node_ptr.free()
 
         return new_tensor
 
@@ -246,33 +238,42 @@ struct Tensor:
 
     fn static(self) raises -> Self:
         _ = self.forward()
-        for i in range(self.graph_ptr.load().load().nodes.load().len.load()):
-            let node = self.graph_ptr.load().load().nodes.load().load(i)
-            node.load().is_static_ptr.store(True)
-            node.load().computed_ptr.store(True)
+        # for i in range(self.graph_ptr.load().load().nodes.load().len.load()):
+        #     let node = self.graph_ptr.load().load().nodes.load().load(i)
+        self.node_ptr.load().load().is_static_ptr.store(True)
         return self
 
     fn dynamic(self) raises -> Self:
         self.node_ptr.load().load().is_static_ptr.store(False)
         self.node_ptr.load().load().is_single_ptr.store(True)
-        # _ = self.forward()
+        _ = self.forward()
         return self
 
     fn store(self, idx: Int, val: Float32):
         self.node_ptr.load().load().data.load().store(idx, val)
 
-
-    # keep the tensor and don't free its underlying compute node in teh computation graph. 
-    # Useful for repurposing a tensor
-    fn keep(self) raises -> Self:
-        # _ = self.forward()
-        self.node_ptr.load().load().is_single_ptr.store(True)
-        return self
-
     # If a tensor has been marked with keep, the Compute node needs to be manually freed 
     # again, in order to prevent memory leaks
     fn free(self) raises: 
-        self.node_ptr.load().load().is_static_ptr.store(False)
+        # free all graph related parts 
+        self.graph_ptr.load().load().nodes.load().free()
+        self.graph_ptr.load().load().nodes.free()
+        self.graph_ptr.load().load().memory_pool.load().free()
+        self.graph_ptr.load().load().memory_pool.free()
+        for i in range(30):
+            self.graph_ptr.load().load().memory_pool_manager.load(i).free()
+        self.graph_ptr.load().load().memory_pool_manager.free()
+        self.graph_ptr.load().load().free_node_ids.load().free()
+        self.graph_ptr.load().load().free_node_ids.free()
+        self.graph_ptr.load().load().free_data_ids.load().free()
+        self.graph_ptr.load().load().free_data_ids.free()
+        self.graph_ptr.load().load().last_node_id.free()
+        self.graph_ptr.load().load().kernels.free()
+        self.graph_ptr.load().load().forward_order.load().free()
+        self.graph_ptr.load().load().forward_order.free()
+        self.graph_ptr.load().load().compiled.free()
+
+        self.graph_ptr.load().free()
         self.graph_ptr.free()
         self.node_ptr.free()
 
@@ -700,10 +701,6 @@ fn fuse_graphs(graph_ptr: Pointer[Pointer[Graph]], other_graph_ptr: Pointer[Poin
 ##################################################################################################################
 # some external methods to be called as functions, not as tensor methods
 ##################################################################################################################
-    
-fn keep(tensor: Tensor) raises -> Tensor:
-    _ = tensor.keep()
-    return tensor
 
 fn add(a: Tensor,b: Tensor) raises -> Tensor:
     return a + b

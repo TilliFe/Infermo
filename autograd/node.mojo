@@ -11,7 +11,6 @@ from random import rand, random_si64, seed, randint
 alias VectorF32 = DTypePointer[DType.float32]
 alias VectorInt = Vector[Int]
 alias DTVector = Vector[VectorF32]
-alias NodeVector = Vector[Pointer[Node]]
 
 from .utils import Vector
 
