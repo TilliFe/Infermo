@@ -1,10 +1,10 @@
 from autograd import Node
 from math import max, abs
 
-fn shape(*shape: Int) -> DynamicVector[Int]:
+fn shape(*shapes: Int) -> DynamicVector[Int]:
     var _shape = DynamicVector[Int]()
-    for i in range(len(shape)):
-        _shape.push_back(shape[i])
+    for i in range(len(shapes)):
+        _shape.push_back(shapes[i])
     return _shape
 
 fn get_broadcasted_shape_for_ew_op(parent1: Pointer[Node], parent2: Pointer[Node]) -> DynamicVector[Int]:

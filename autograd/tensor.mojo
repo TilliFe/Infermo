@@ -304,14 +304,15 @@ struct Tensor:
     fn optimize(self, lr: Float32 = 0.001, type: String = "sgd") raises:
         self.graph_ptr.load().load().optimizer_step(lr,type)
 
-    fn __getitem__(self, *idx: Int) raises -> Float32:
-        if len(idx) != self.node_ptr.load().load().shape_ptr.load().copy().len.load():
-            print("Error: Invalid number of indices")
-            return 0.0
-        var index = 0
-        for i in range(len(idx)):
-            index += idx[i] * self.node_ptr.load().load().strides_ptr.load().load(i)
-        return self.node_ptr.load().load().load_data(index)
+    fn __getitem__(self, idx: Int) raises -> Float32:
+        return self.node_ptr.load().load().data.load().load(idx)
+
+    fn __setitem__(self, idx: Int, val: Float32) raises:
+        self.node_ptr.load().load().data.load().store(idx, val)
+
+    fn capacity(self) raises -> Int:
+        return self.node_ptr.load().load().cap_ptr.load()
+
 
 
     ####################################################################################

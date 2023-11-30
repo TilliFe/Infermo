@@ -12,22 +12,26 @@ Infermo is still a Proof-of-Concept, if you encounter any bugs, feel free to cre
 
 ## A tiny Example
 ```python
-# lets's build a simple neural network that learns to approximate sin(15x)
+# Lets's build a simple neural network that learns to approximate sin(15x)
+# Dynamic Computation Graph (with conditional model architecture!!!) (static execution is also possible)
+
 fn main() raises:
 
     # init params
     let W1 = Tensor(shape(1,64)).randhe().requires_grad()
     let W2 = Tensor(shape(64,64)).randhe().requires_grad()
     let W3 = Tensor(shape(64,1)).randhe().requires_grad()
+    let W_opt = Tensor(shape(64,64)).randhe().requires_grad()
     let b1 = Tensor(shape(64)).randhe().requires_grad()
     let b2 = Tensor(shape(64)).randhe().requires_grad()
     let b3 = Tensor(shape(1)).randhe().requires_grad()
+    let b_opt = Tensor(shape(64)).randhe().requires_grad()
 
-    # training
     var avg_loss = Float32(0.0)
     let every = 1000
-    let num_epochs = 1000000
+    let num_epochs = 20000
 
+    # training
     for epoch in range(1,num_epochs+1):
 
         # set input and true values
@@ -37,6 +41,8 @@ fn main() raises:
         # define model architecture
         var x = relu(input @ W1 + b1)
         x = relu(x @ W2 + b2)
+        if epoch < 100:
+            x = relu(x @ W_opt + b_opt) 
         x = x @ W3 + b3
         let loss = mse(x,true_vals).forward()
 
@@ -45,13 +51,14 @@ fn main() raises:
         if epoch%every == 0:
             print("Epoch:",epoch," Avg Loss: ",avg_loss/every)
             avg_loss = 0.0   
-
-        # compute gradients and optimize
+       
+        # # compute gradients and optimize
         loss.backward()
         loss.optimize(0.01,"sgd")
 
         # clear graph
         loss.clear() 
+        input.free()
 ```
 
 ## Unique Feature

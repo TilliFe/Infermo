@@ -907,6 +907,68 @@ struct Graph:
         return self.node(shape,False,False,checkpoint,operator_id,a,b)
 
 
+    # @always_inline
+    # fn conv_2d(inout self, inout a: Tensor, inout b: Tensor, padding: Int, stride: Int) -> Tensor: # a: input, b: kernels
+
+    #     # assumption: a (batch of input images) is of shape (batch_size, channels, width, height)
+    #     #             b (set of kernels) is of shape (num_filters, channels, a, b)
+
+    #     let a_num_dims = a.num_dims
+    #     let b_num_dims = b.num_dims
+
+    #     let batch_size = a.shape[0]
+    #     let in_channels = a.shape[1]
+    #     let width = a.shape[2]
+    #     let height = a.shape[3]
+
+    #     let out_channels = b.shape[0]
+    #     if(in_channels != b.shape[1]):
+    #         print("Error (at conv_2d): number of channels must be equal in the input and the kernels")
+    #     let kernel_width = b.shape[2]
+    #     let kernel_height = b.shape[3]
+
+    #     # init result Tensor 
+    #     let new_shape = shape(batch_size,out_channels, (width - kernel_width + 2*padding) // stride + 1, (height - kernel_height + 2*padding) // stride + 1) 
+    #     var c = Tensor(new_shape)
+
+    #     c.other_params.store(0, padding)
+    #     c.other_params.store(1, stride)
+
+    #     c.set_name('conv_2d')
+
+    #     c.num_parents = 2
+    #     c.set_parent(0,a)
+    #     c.set_parent(1,b)
+        
+    #     self.add_dynamic_node(c)
+
+    #     conv_2d(c,a,b)
+
+    #     return c 
+
+
+    # @always_inline
+    # fn max_pool_2d(inout self, inout a: Tensor, kernel_width: Int, kernel_height: Int, stride: Int, padding: Int) -> Tensor: 
+    #     let new_shape = shape(a.shape[0],a.shape[1],(2*padding + a.shape[2] - (kernel_width - 1) - 1)//stride + 1, (2*padding + a.shape[3] - (kernel_height - 1) - 1)//stride + 1)
+
+    #     var b = Tensor(new_shape)
+
+    #     b.other_params.store(0,padding)
+    #     b.other_params.store(1,stride)
+    #     b.other_params.store(2,kernel_width)
+    #     b.other_params.store(3,kernel_height)
+
+    #     b.set_name('max_pool_2d')
+    #     b.num_parents = 1
+    #     b.set_parent(0,a)
+
+    #     self.add_dynamic_node(b)
+
+    #     max_pool_2d(b,a)
+
+    #     return b
+
+
     ####################################################################################
     # view operators
     ####################################################################################

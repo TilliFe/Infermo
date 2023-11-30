@@ -963,3 +963,85 @@ fn bw_transpose(node: Node, parent1: Node):
                 )
             vectorize[nelts, v_transpose_bw](N)
 
+
+
+
+
+
+# @always_inline
+# fn conv_2d(inout c: Tensor, a: Tensor, b: Tensor):
+    
+#     let padding = c.other_params.load(0)
+#     let stride = c.other_params.load(1)
+
+#     # Function to calculate the index in the 1D buffer
+#     fn index(n: Int, c: Int, h: Int, w: Int, num_channels: Int, width: Int, height: Int) -> Int:
+#         return n*(num_channels*height*width) + c*(height*width) + h*width + w
+
+#     # Loop over each image in the batch
+#     @parameter
+#     fn batch_loop(i: Int):
+#         for j in range(b.shape[0]):
+#             for x in range(c.shape[2]):
+#                 for y in range(c.shape[3]):
+#                     var patch_sum: Float32 = 0.0
+#                     # apply the convolution operation - vectorize?
+#                     for k in range(a.shape[1]):
+#                         for dx in range(b.shape[2]):
+                            
+#                             @parameter
+#                             fn inner_loop[_nelts: Int](dy: Int):                        
+#                                 let ix = x * stride - padding + dx
+#                                 let iy = y * stride - padding + dy
+#                                 if not (
+#                                     ix < 0
+#                                     or iy < 0
+#                                     or ix >= a.shape[2]
+#                                     or iy >= a.shape[3]
+#                                 ):
+#                                     let a_index = index(i, k, ix, iy, a.shape[1], a.shape[2], a.shape[3])
+#                                     let b_index = index(j, k, dx, dy, a.shape[1], b.shape[2], b.shape[3])
+#                                     patch_sum += (
+#                                         a.data.simd_load[_nelts](a_index)
+#                                         * b.data.simd_load[_nelts](b_index)
+#                                     ).reduce_add()
+
+#                             vectorize[nelts, inner_loop](b.shape[3])
+#                     let c_index = index(i, j, x, y, b.shape[0], c.shape[2], c.shape[3])
+#                     c.data.store(c_index, patch_sum)
+
+#     parallelize[batch_loop](a.shape[0], workers if workers > 0 else a.shape[0])
+
+
+# @always_inline
+# fn max_pool_2d(inout b: Tensor, a: Tensor):
+    
+#     let padding = b.other_params.load(0)
+#     let stride = b.other_params.load(1)
+#     let kernel_width = b.other_params.load(2)
+#     let kernel_height = b.other_params.load(3)
+
+#     # Function to calculate the index in the 1D buffer
+#     fn index(n: Int, c: Int, h: Int, w: Int, num_channels: Int, width: Int, height: Int) -> Int:
+#         return n*(num_channels*height*width) + c*(height*width) + h*width + w
+
+#     for p in range(a.shape[0]): # batch_size
+#         for i in range(a.shape[1]): # in_channels
+#             for x in range(0,a.shape[2]-kernel_width+1 + 2*padding,stride): # width
+#                 for y in range(0,a.shape[3]-kernel_height+1 + 2*padding,stride): # height
+#                     var arg_max: Int = 0
+#                     var max_val: Float32 = -1000000.0
+#                     # vectorize ?
+#                     for dx in range(kernel_width):
+#                         for dy in range(kernel_height):
+#                             let ix = x - padding + dx
+#                             let iy = y - padding + dy
+#                             if ix < 0 or iy < 0 or ix >= a.shape[2] or iy >= a.shape[3]:
+#                                 continue
+#                             let idx = index(p,i,ix,iy,a.shape[1],a.shape[2],a.shape[3])
+#                             let entry = a.data.load(idx)
+#                             if(entry > max_val):
+#                                 max_val = entry
+#                                 arg_max = idx
+#                     let idx = index(p,i,(x)//stride,(y)//stride,b.shape[1],b.shape[2],b.shape[3])
+#                     b.data.store(idx,max_val)       
