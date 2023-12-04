@@ -35,7 +35,4 @@ from .tensor import (
     max_pool_2d,
 )
 
-from .components import (
-    Linear,
-    Conv2d
-)
+from .components import Linear, Conv2d

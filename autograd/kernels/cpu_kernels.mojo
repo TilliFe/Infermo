@@ -1292,12 +1292,14 @@ fn bw_transpose(node: Node, parent1: Node):
 
 
 # Function to calculate the index in the 1D buffer
-fn index(n: Int, c: Int, h: Int, w: Int, num_channels: Int, width: Int, height: Int) -> Int:
-    return n*(num_channels*height*width) + c*(height*width) + h*width + w
+fn index(
+    n: Int, c: Int, h: Int, w: Int, num_channels: Int, width: Int, height: Int
+) -> Int:
+    return n * (num_channels * height * width) + c * (height * width) + h * width + w
+
 
 @always_inline
 fn conv_2d(c: Node, a: Node, b: Node):
-
     let padding = c.other_params_ptr.load().load(0)
     let stride = c.other_params_ptr.load().load(1)
 
@@ -1322,22 +1324,50 @@ fn conv_2d(c: Node, a: Node, b: Node):
                                     or ix >= a.shape_ptr.load().load(2)
                                     or iy >= a.shape_ptr.load().load(3)
                                 ):
-                                    let a_index = index(i, k, ix, iy, a.shape_ptr.load().load(1), a.shape_ptr.load().load(2), a.shape_ptr.load().load(3))
-                                    let b_index = index(j, k, dx, dy, a.shape_ptr.load().load(1), b.shape_ptr.load().load(2), b.shape_ptr.load().load(3))
+                                    let a_index = index(
+                                        i,
+                                        k,
+                                        ix,
+                                        iy,
+                                        a.shape_ptr.load().load(1),
+                                        a.shape_ptr.load().load(2),
+                                        a.shape_ptr.load().load(3),
+                                    )
+                                    let b_index = index(
+                                        j,
+                                        k,
+                                        dx,
+                                        dy,
+                                        a.shape_ptr.load().load(1),
+                                        b.shape_ptr.load().load(2),
+                                        b.shape_ptr.load().load(3),
+                                    )
                                     patch_sum += (
                                         a.load_data[_nelts](a_index)
                                         * b.load_data[_nelts](b_index)
                                     ).reduce_add()
 
                             vectorize[nelts, inner_loop](b.shape_ptr.load().load(3))
-                    let c_index = index(i, j, x, y, b.shape_ptr.load().load(0), c.shape_ptr.load().load(2), c.shape_ptr.load().load(3))
+                    let c_index = index(
+                        i,
+                        j,
+                        x,
+                        y,
+                        b.shape_ptr.load().load(0),
+                        c.shape_ptr.load().load(2),
+                        c.shape_ptr.load().load(3),
+                    )
                     c.store_data(c_index, patch_sum)
 
-    parallelize[batch_loop](a.shape_ptr.load().load(0), workers if workers > 0 else a.shape_ptr.load().load(0))
+    parallelize[batch_loop](
+        a.shape_ptr.load().load(0),
+        workers if workers > 0 else a.shape_ptr.load().load(0),
+    )
+
 
 # @always_inline
 # fn conv_2d_grad(c: Tensor, inout a: Tensor, inout b: Tensor):
-  
+
 #     let padding = c.other_params.load(0)
 #     let stride = c.other_params.load(1)
 
@@ -1353,9 +1383,9 @@ fn conv_2d(c: Node, a: Node, b: Node):
 #                     var patch_sum: Float32 = 0.0
 #                     for b in range(a.shape[0]):
 #                         for dx in range(c.shape[2]):
-                            
+
 #                             @parameter
-#                             fn inner_loop[_nelts: Int](dy: Int):                        
+#                             fn inner_loop[_nelts: Int](dy: Int):
 #                                 # calculate input indices with consideration for padding and stride
 #                                 let ix = x * stride - padding + dx
 #                                 let iy = y * stride - padding + dy
@@ -1421,15 +1451,16 @@ fn conv_2d(c: Node, a: Node, b: Node):
 #                                         c.grad.simd_load[_nelts](c_grad_index)
 #                                         * c.data.simd_load[_nelts](b_index)
 #                                     ).reduce_add()
-                            
+
 #                             vectorize[nelts, dy_loop](b.shape[3])
 #                         let a_grad_index = index(p,j,x,y,a.shape[1],a.shape[2],a.shape[3])
 #                         a.grad.store( a_grad_index, a.grad.load(a_grad_index) + patch_sum)
 
 #     parallelize[batch_loop](a.shape[0], workers if workers > 0 else a.shape[0])
 
+
 # updated ibackward implementation
-fn bw_conv_2d(c: Node, a: Node, b: Node): 
+fn bw_conv_2d(c: Node, a: Node, b: Node):
     let padding = c.other_params_ptr.load().load(0)
     let stride = c.other_params_ptr.load().load(1)
 
@@ -1452,26 +1483,49 @@ fn bw_conv_2d(c: Node, a: Node, b: Node):
                                     or ix >= a.shape_ptr.load().load(2)
                                     or iy >= a.shape_ptr.load().load(3)
                                 ):
-                                    let a_index = index(b, i, ix, iy, a.shape_ptr.load().load(1), a.shape_ptr.load().load(2), a.shape_ptr.load().load(3))
-                                    let c_grad_index = index(b, j, dx, dy, c.shape_ptr.load().load(1), c.shape_ptr.load().load(2), c.shape_ptr.load().load(3))
+                                    let a_index = index(
+                                        b,
+                                        i,
+                                        ix,
+                                        iy,
+                                        a.shape_ptr.load().load(1),
+                                        a.shape_ptr.load().load(2),
+                                        a.shape_ptr.load().load(3),
+                                    )
+                                    let c_grad_index = index(
+                                        b,
+                                        j,
+                                        dx,
+                                        dy,
+                                        c.shape_ptr.load().load(1),
+                                        c.shape_ptr.load().load(2),
+                                        c.shape_ptr.load().load(3),
+                                    )
                                     # add to patch sum
                                     patch_sum += (
-                                        a.load_data(a_index)
-                                        * c.load_grad(c_grad_index)
+                                        a.load_data(a_index) * c.load_grad(c_grad_index)
                                     ).reduce_add()
-                    let b_grad_index = index(i, j, x, y, b.shape_ptr.load().load(0), b.shape_ptr.load().load(2), b.shape_ptr.load().load(3))
-                    b.store_grad(b_grad_index, patch_sum)   
-    
+                    let b_grad_index = index(
+                        i,
+                        j,
+                        x,
+                        y,
+                        b.shape_ptr.load().load(0),
+                        b.shape_ptr.load().load(2),
+                        b.shape_ptr.load().load(3),
+                    )
+                    b.store_grad(b_grad_index, patch_sum)
+
     #  compute the gradient of the Input (left tensor) ############################################
     @parameter
     fn batch_loop(p: Int):  # batch_size
-        for j in range(a.shape_ptr.load().load(1)): # in_channels
-            for i in range(b.shape_ptr.load().load(0)): # out_channels
+        for j in range(a.shape_ptr.load().load(1)):  # in_channels
+            for i in range(b.shape_ptr.load().load(0)):  # out_channels
                 for x in range(a.shape_ptr.load().load(2)):
                     for y in range(a.shape_ptr.load().load(3)):
-                        var patch_sum : Float32 = 0.0
+                        var patch_sum: Float32 = 0.0
                         for dx in range(b.shape_ptr.load().load(2)):
-                            
+
                             @parameter
                             fn dy_loop[_nelts: Int](dy: Int):
                                 let ix = x * stride - dx + padding
@@ -1505,28 +1559,43 @@ fn bw_conv_2d(c: Node, a: Node, b: Node):
                                         c.load_grad[_nelts](c_grad_index)
                                         * c.load_data[_nelts](b_index)
                                     ).reduce_add()
-                            
+
                             vectorize[nelts, dy_loop](b.shape_ptr.load().load(3))
-                        let a_grad_index = index(p,j,x,y,a.shape_ptr.load().load(1),a.shape_ptr.load().load(2),a.shape_ptr.load().load(3))
-                        a.store_grad( a_grad_index, a.load_grad(a_grad_index) + patch_sum)
-    
-    parallelize[batch_loop](a.shape_ptr.load().load(0), workers if workers > 0 else a.shape_ptr.load().load(0))
-    
+                        let a_grad_index = index(
+                            p,
+                            j,
+                            x,
+                            y,
+                            a.shape_ptr.load().load(1),
+                            a.shape_ptr.load().load(2),
+                            a.shape_ptr.load().load(3),
+                        )
+                        a.store_grad(
+                            a_grad_index, a.load_grad(a_grad_index) + patch_sum
+                        )
 
-
+    parallelize[batch_loop](
+        a.shape_ptr.load().load(0),
+        workers if workers > 0 else a.shape_ptr.load().load(0),
+    )
 
 
 fn max_pool_2d(b: Node, a: Node):
-
     let padding = b.other_params_ptr.load().load(0)
     let stride = b.other_params_ptr.load().load(1)
     let kernel_width = b.other_params_ptr.load().load(2)
     let kernel_height = b.other_params_ptr.load().load(3)
 
-    for p in range(a.shape_ptr.load().load(0)): # batch_size
-        for i in range(a.shape_ptr.load().load(1)): # in_channels
-            for x in range(0,a.shape_ptr.load().load(2)-kernel_width+1 + 2*padding,stride): # width
-                for y in range(0,a.shape_ptr.load().load(3)-kernel_height+1 + 2*padding,stride): # height
+    for p in range(a.shape_ptr.load().load(0)):  # batch_size
+        for i in range(a.shape_ptr.load().load(1)):  # in_channels
+            for x in range(
+                0, a.shape_ptr.load().load(2) - kernel_width + 1 + 2 * padding, stride
+            ):  # width
+                for y in range(
+                    0,
+                    a.shape_ptr.load().load(3) - kernel_height + 1 + 2 * padding,
+                    stride,
+                ):  # height
                     var arg_max: Int = 0
                     var max_val: Float32 = -1000000.0
                     # vectorize ?
@@ -1534,15 +1603,36 @@ fn max_pool_2d(b: Node, a: Node):
                         for dy in range(kernel_height):
                             let ix = x - padding + dx
                             let iy = y - padding + dy
-                            if ix < 0 or iy < 0 or ix >= a.shape_ptr.load().load(2) or iy >= a.shape_ptr.load().load(3):
+                            if (
+                                ix < 0
+                                or iy < 0
+                                or ix >= a.shape_ptr.load().load(2)
+                                or iy >= a.shape_ptr.load().load(3)
+                            ):
                                 continue
-                            let idx = index(p,i,ix,iy,a.shape_ptr.load().load(1),a.shape_ptr.load().load(2),a.shape_ptr.load().load(3))
+                            let idx = index(
+                                p,
+                                i,
+                                ix,
+                                iy,
+                                a.shape_ptr.load().load(1),
+                                a.shape_ptr.load().load(2),
+                                a.shape_ptr.load().load(3),
+                            )
                             let entry = a.load_data(idx)
-                            if(entry > max_val):
+                            if entry > max_val:
                                 max_val = entry
                                 arg_max = idx
-                    let idx = index(p,i,(x)//stride,(y)//stride,b.shape_ptr.load().load(1),b.shape_ptr.load().load(2),b.shape_ptr.load().load(3))
-                    b.store_data(idx,max_val)
+                    let idx = index(
+                        p,
+                        i,
+                        (x) // stride,
+                        (y) // stride,
+                        b.shape_ptr.load().load(1),
+                        b.shape_ptr.load().load(2),
+                        b.shape_ptr.load().load(3),
+                    )
+                    b.store_data(idx, max_val)
 
 
 # @always_inline
@@ -1579,28 +1669,57 @@ fn max_pool_2d(b: Node, a: Node):
 
 
 # updated version
-fn bw_max_pool_2d(b: Node, a: Node): 
+fn bw_max_pool_2d(b: Node, a: Node):
     let padding = b.other_params_ptr.load().load(0)
     let stride = b.other_params_ptr.load().load(1)
     let kernel_width = b.other_params_ptr.load().load(2)
     let kernel_height = b.other_params_ptr.load().load(3)
 
-    for p in range(a.shape_ptr.load().load(0)): # batch_size
-        for i in range(a.shape_ptr.load().load(1)): # in_channels
-            for x in range(0,a.shape_ptr.load().load(2)-kernel_width+1 + 2*padding,stride): # width
-                for y in range(0,a.shape_ptr.load().load(3)-kernel_height+1 + 2*padding,stride): # height
+    for p in range(a.shape_ptr.load().load(0)):  # batch_size
+        for i in range(a.shape_ptr.load().load(1)):  # in_channels
+            for x in range(
+                0, a.shape_ptr.load().load(2) - kernel_width + 1 + 2 * padding, stride
+            ):  # width
+                for y in range(
+                    0,
+                    a.shape_ptr.load().load(3) - kernel_height + 1 + 2 * padding,
+                    stride,
+                ):  # height
                     var arg_max: Int = 0
                     var max_val: Float32 = -1000000.0
                     for dx in range(kernel_width):
                         for dy in range(kernel_height):
                             let ix = x - padding + dx
                             let iy = y - padding + dy
-                            if ix < 0 or iy < 0 or ix >= a.shape_ptr.load().load(2) or iy >= a.shape_ptr.load().load(3):
+                            if (
+                                ix < 0
+                                or iy < 0
+                                or ix >= a.shape_ptr.load().load(2)
+                                or iy >= a.shape_ptr.load().load(3)
+                            ):
                                 continue
-                            let idx = index(p,i,ix,iy,a.shape_ptr.load().load(1),a.shape_ptr.load().load(2),a.shape_ptr.load().load(3))
+                            let idx = index(
+                                p,
+                                i,
+                                ix,
+                                iy,
+                                a.shape_ptr.load().load(1),
+                                a.shape_ptr.load().load(2),
+                                a.shape_ptr.load().load(3),
+                            )
                             let entry = a.load_data(idx)
-                            if(entry > max_val):
+                            if entry > max_val:
                                 max_val = entry
                                 arg_max = idx
-                    let b_grad_idx = index(p,i,(x)//stride,(y)//stride,b.shape_ptr.load().load(1),b.shape_ptr.load().load(2),b.shape_ptr.load().load(3))
-                    a.store_grad(arg_max, a.load_grad(arg_max) + b.load_grad(b_grad_idx))
+                    let b_grad_idx = index(
+                        p,
+                        i,
+                        (x) // stride,
+                        (y) // stride,
+                        b.shape_ptr.load().load(1),
+                        b.shape_ptr.load().load(2),
+                        b.shape_ptr.load().load(3),
+                    )
+                    a.store_grad(
+                        arg_max, a.load_grad(arg_max) + b.load_grad(b_grad_idx)
+                    )

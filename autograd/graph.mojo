@@ -147,7 +147,6 @@ struct Graph:
         kernels.store(60, op_tuple("maxpool2dd", max_pool_2d, binary, view, reduce))
         kernels.store(61, op_tuple("bwmaxpool2d", bw_max_pool_2d, binary, view, reduce))
 
-
         let forward_order = Pointer[VectorInt].alloc(1)
         forward_order.store(VectorInt())
 
@@ -851,119 +850,153 @@ struct Graph:
         let checkpoint = False
         let shape = parent1_ptr.load().shape_ptr.load().copy()
         let other_params = Vector[Int]()
-        return self.node(shape, False, False, checkpoint, operator_id, other_params, parent1_ptr)
+        return self.node(
+            shape, False, False, checkpoint, operator_id, other_params, parent1_ptr
+        )
 
     fn sin(self, parent1_ptr: Pointer[Node]) raises -> Pointer[Node]:
         let operator_id = 2
         let checkpoint = False
         let shape = parent1_ptr.load().shape_ptr.load().copy()
-        let other_params = Vector[Int]() 
-        return self.node(shape, False, False, checkpoint, operator_id, other_params, parent1_ptr)
+        let other_params = Vector[Int]()
+        return self.node(
+            shape, False, False, checkpoint, operator_id, other_params, parent1_ptr
+        )
 
     fn tan(self, parent1_ptr: Pointer[Node]) raises -> Pointer[Node]:
         let operator_id = 4
         let checkpoint = False
         let shape = parent1_ptr.load().shape_ptr.load().copy()
-        let other_params = Vector[Int]() 
-        return self.node(shape, False, False, checkpoint, operator_id, other_params, parent1_ptr)
+        let other_params = Vector[Int]()
+        return self.node(
+            shape, False, False, checkpoint, operator_id, other_params, parent1_ptr
+        )
 
     fn acos(self, parent1_ptr: Pointer[Node]) raises -> Pointer[Node]:
         let operator_id = 6
         let checkpoint = False
         let shape = parent1_ptr.load().shape_ptr.load().copy()
-        let other_params = Vector[Int]() 
-        return self.node(shape, False, False, checkpoint, operator_id, other_params, parent1_ptr)
+        let other_params = Vector[Int]()
+        return self.node(
+            shape, False, False, checkpoint, operator_id, other_params, parent1_ptr
+        )
 
     fn asin(self, parent1_ptr: Pointer[Node]) raises -> Pointer[Node]:
         let operator_id = 8
         let checkpoint = False
         let shape = parent1_ptr.load().shape_ptr.load().copy()
-        let other_params = Vector[Int]() 
-        return self.node(shape, False, False, checkpoint, operator_id, other_params, parent1_ptr)
+        let other_params = Vector[Int]()
+        return self.node(
+            shape, False, False, checkpoint, operator_id, other_params, parent1_ptr
+        )
 
     fn atan(self, parent1_ptr: Pointer[Node]) raises -> Pointer[Node]:
         let operator_id = 10
         let checkpoint = False
         let shape = parent1_ptr.load().shape_ptr.load().copy()
-        let other_params = Vector[Int]() 
-        return self.node(shape, False, False, checkpoint, operator_id, other_params, parent1_ptr)
+        let other_params = Vector[Int]()
+        return self.node(
+            shape, False, False, checkpoint, operator_id, other_params, parent1_ptr
+        )
 
     fn cosh(self, parent1_ptr: Pointer[Node]) raises -> Pointer[Node]:
         let operator_id = 12
         let checkpoint = False
         let shape = parent1_ptr.load().shape_ptr.load().copy()
-        let other_params = Vector[Int]() 
-        return self.node(shape, False, False, checkpoint, operator_id, other_params, parent1_ptr)
+        let other_params = Vector[Int]()
+        return self.node(
+            shape, False, False, checkpoint, operator_id, other_params, parent1_ptr
+        )
 
     fn sinh(self, parent1_ptr: Pointer[Node]) raises -> Pointer[Node]:
         let operator_id = 14
         let checkpoint = False
         let shape = parent1_ptr.load().shape_ptr.load().copy()
-        let other_params = Vector[Int]() 
-        return self.node(shape, False, False, checkpoint, operator_id, other_params, parent1_ptr)
+        let other_params = Vector[Int]()
+        return self.node(
+            shape, False, False, checkpoint, operator_id, other_params, parent1_ptr
+        )
 
     fn tanh(self, parent1_ptr: Pointer[Node]) raises -> Pointer[Node]:
         let operator_id = 16
         let checkpoint = False
         let shape = parent1_ptr.load().shape_ptr.load().copy()
-        let other_params = Vector[Int]() 
-        return self.node(shape, False, False, checkpoint, operator_id, other_params, parent1_ptr)
+        let other_params = Vector[Int]()
+        return self.node(
+            shape, False, False, checkpoint, operator_id, other_params, parent1_ptr
+        )
 
     fn log(self, parent1_ptr: Pointer[Node]) raises -> Pointer[Node]:
         let operator_id = 18
         let checkpoint = False
         let shape = parent1_ptr.load().shape_ptr.load().copy()
-        let other_params = Vector[Int]() 
-        return self.node(shape, False, False, checkpoint, operator_id, other_params, parent1_ptr)
+        let other_params = Vector[Int]()
+        return self.node(
+            shape, False, False, checkpoint, operator_id, other_params, parent1_ptr
+        )
 
     fn log2(self, parent1_ptr: Pointer[Node]) raises -> Pointer[Node]:
         let operator_id = 20
         let checkpoint = False
         let shape = parent1_ptr.load().shape_ptr.load().copy()
-        let other_params = Vector[Int]() 
-        return self.node(shape, False, False, checkpoint, operator_id, other_params, parent1_ptr)
+        let other_params = Vector[Int]()
+        return self.node(
+            shape, False, False, checkpoint, operator_id, other_params, parent1_ptr
+        )
 
     fn exp(self, parent1_ptr: Pointer[Node]) raises -> Pointer[Node]:
         let operator_id = 22
         let checkpoint = False
         let shape = parent1_ptr.load().shape_ptr.load().copy()
-        let other_params = Vector[Int]() 
-        return self.node(shape, False, False, checkpoint, operator_id, other_params, parent1_ptr)
+        let other_params = Vector[Int]()
+        return self.node(
+            shape, False, False, checkpoint, operator_id, other_params, parent1_ptr
+        )
 
     fn exp2(self, parent1_ptr: Pointer[Node]) raises -> Pointer[Node]:
         let operator_id = 24
         let checkpoint = False
         let shape = parent1_ptr.load().shape_ptr.load().copy()
-        let other_params = Vector[Int]() 
-        return self.node(shape, False, False, checkpoint, operator_id, other_params, parent1_ptr)
+        let other_params = Vector[Int]()
+        return self.node(
+            shape, False, False, checkpoint, operator_id, other_params, parent1_ptr
+        )
 
     fn sqrt(self, parent1_ptr: Pointer[Node]) raises -> Pointer[Node]:
         let operator_id = 26
         let checkpoint = False
         let shape = parent1_ptr.load().shape_ptr.load().copy()
-        let other_params = Vector[Int]() 
-        return self.node(shape, False, False, checkpoint, operator_id, other_params, parent1_ptr)
+        let other_params = Vector[Int]()
+        return self.node(
+            shape, False, False, checkpoint, operator_id, other_params, parent1_ptr
+        )
 
     fn abs(self, parent1_ptr: Pointer[Node]) raises -> Pointer[Node]:
         let operator_id = 28
         let checkpoint = False
         let shape = parent1_ptr.load().shape_ptr.load().copy()
-        let other_params = Vector[Int]() 
-        return self.node(shape, False, False, checkpoint, operator_id, other_params, parent1_ptr)
+        let other_params = Vector[Int]()
+        return self.node(
+            shape, False, False, checkpoint, operator_id, other_params, parent1_ptr
+        )
 
     fn relu(self, parent1_ptr: Pointer[Node]) raises -> Pointer[Node]:
         let operator_id = 30
         let checkpoint = False
         let shape = parent1_ptr.load().shape_ptr.load().copy()
-        let other_params = Vector[Int]() 
-        return self.node(shape, False, False, checkpoint, operator_id, other_params, parent1_ptr)
+        let other_params = Vector[Int]()
+        return self.node(
+            shape, False, False, checkpoint, operator_id, other_params, parent1_ptr
+        )
 
     fn copy(self, parent1_ptr: Pointer[Node]) raises -> Pointer[Node]:
         let operator_id = 32
         let checkpoint = False
         let shape = parent1_ptr.load().shape_ptr.load().copy()
-        let other_params = Vector[Int]() 
-        return self.node(shape, True, False, checkpoint, operator_id, other_params, parent1_ptr)
+        let other_params = Vector[Int]()
+        return self.node(
+            shape, True, False, checkpoint, operator_id, other_params, parent1_ptr
+        )
 
     ####################################################################################
     # binary operators
@@ -972,36 +1005,46 @@ struct Graph:
         let operator_id = 34
         let checkpoint = False
         let shape = get_broadcasted_shape_for_ew_op(a, b)
-        let other_params = Vector[Int]() 
-        return self.node(shape, False, False, checkpoint, operator_id, other_params, a, b)
+        let other_params = Vector[Int]()
+        return self.node(
+            shape, False, False, checkpoint, operator_id, other_params, a, b
+        )
 
     fn sub(self, a: Pointer[Node], b: Pointer[Node]) raises -> Pointer[Node]:
         let operator_id = 36
         let checkpoint = False
         let shape = get_broadcasted_shape_for_ew_op(a, b)
         let other_params = Vector[Int]()
-        return self.node(shape, False, False, checkpoint, operator_id, other_params, a, b)
+        return self.node(
+            shape, False, False, checkpoint, operator_id, other_params, a, b
+        )
 
     fn mul(self, a: Pointer[Node], b: Pointer[Node]) raises -> Pointer[Node]:
         let operator_id = 38
         let checkpoint = False
         let shape = get_broadcasted_shape_for_ew_op(a, b)
         let other_params = Vector[Int]()
-        return self.node(shape, False, False, checkpoint, operator_id, other_params, a, b)
+        return self.node(
+            shape, False, False, checkpoint, operator_id, other_params, a, b
+        )
 
     fn div(self, a: Pointer[Node], b: Pointer[Node]) raises -> Pointer[Node]:
         let operator_id = 40
         let checkpoint = False
         let shape = get_broadcasted_shape_for_ew_op(a, b)
         let other_params = Vector[Int]()
-        return self.node(shape, False, False, checkpoint, operator_id, other_params, a, b)
+        return self.node(
+            shape, False, False, checkpoint, operator_id, other_params, a, b
+        )
 
     fn pow(self, a: Pointer[Node], b: Pointer[Node]) raises -> Pointer[Node]:
         let operator_id = 42
         let checkpoint = False
         let shape = get_broadcasted_shape_for_ew_op(a, b)
         let other_params = Vector[Int]()
-        return self.node(shape, False, False, checkpoint, operator_id, other_params, a, b)
+        return self.node(
+            shape, False, False, checkpoint, operator_id, other_params, a, b
+        )
 
     fn mmul(self, a: Pointer[Node], b: Pointer[Node]) raises -> Pointer[Node]:
         let operator_id = 44
@@ -1019,11 +1062,13 @@ struct Graph:
         ) != b.load().shape_ptr.load().load(b.load().num_dims_ptr.load() - 2):
             raise "Shapes don't fit for matrix multiplication"
         let other_params = Vector[Int]()
-        return self.node(shape, False, False, checkpoint, operator_id, other_params, a, b)
+        return self.node(
+            shape, False, False, checkpoint, operator_id, other_params, a, b
+        )
 
-
-    fn conv_2d(self, a: Pointer[Node], b: Pointer[Node], padding: Int, stride: Int) raises -> Pointer[Node]: # a: input, b: kernels
-
+    fn conv_2d(
+        self, a: Pointer[Node], b: Pointer[Node], padding: Int, stride: Int
+    ) raises -> Pointer[Node]:  # a: input, b: kernels
         # assumption: a (batch of input images) is of shape (batch_size, channels, width, height)
         #             b (set of kernels) is of shape (num_filters, channels, a, b)
 
@@ -1042,19 +1087,39 @@ struct Graph:
         let kernel_height = b.load().shape_ptr.load().load(3)
 
         # init result Pointer[Node]
-        let shape = shape(batch_size,out_channels, (width - kernel_width + 2*padding) // stride + 1, (height - kernel_height + 2*padding) // stride + 1)
+        let shape = shape(
+            batch_size,
+            out_channels,
+            (width - kernel_width + 2 * padding) // stride + 1,
+            (height - kernel_height + 2 * padding) // stride + 1,
+        )
         let operator_id = 58
         let checkpoint = True
-        let other_params = Vector[Int]() 
+        let other_params = Vector[Int]()
         other_params.push_back(padding)
         other_params.push_back(stride)
-        var c = self.node(shape, False, False, checkpoint, operator_id, other_params, a, b)
+        var c = self.node(
+            shape, False, False, checkpoint, operator_id, other_params, a, b
+        )
 
         return c
 
-
-    fn max_pool_2d(self, a : Pointer[Node], kernel_width: Int, kernel_height: Int, stride: Int, padding: Int) raises -> Pointer[Node]:
-        let new_shape = shape(a.load().shape_ptr.load().load(0),a.load().shape_ptr.load().load(1), (a.load().shape_ptr.load().load(2) - kernel_width + 2*padding)//stride + 1, (a.load().shape_ptr.load().load(3) - kernel_height + 2*padding)//stride + 1)
+    fn max_pool_2d(
+        self,
+        a: Pointer[Node],
+        kernel_width: Int,
+        kernel_height: Int,
+        stride: Int,
+        padding: Int,
+    ) raises -> Pointer[Node]:
+        let new_shape = shape(
+            a.load().shape_ptr.load().load(0),
+            a.load().shape_ptr.load().load(1),
+            (a.load().shape_ptr.load().load(2) - kernel_width + 2 * padding) // stride
+            + 1,
+            (a.load().shape_ptr.load().load(3) - kernel_height + 2 * padding) // stride
+            + 1,
+        )
         let operator_id = 60
         let checkpoint = False
         let other_params = Vector[Int]()
@@ -1063,10 +1128,11 @@ struct Graph:
         other_params.push_back(kernel_width)
         other_params.push_back(kernel_height)
 
-        var b = self.node(new_shape, False, False, checkpoint, operator_id, other_params, a)
+        var b = self.node(
+            new_shape, False, False, checkpoint, operator_id, other_params, a
+        )
 
         return b
-
 
     ####################################################################################
     # view operators
@@ -1076,8 +1142,10 @@ struct Graph:
     ) raises -> Pointer[Node]:
         let operator_id = 46
         let checkpoint = False
-        let other_params = Vector[Int]() 
-        return self.node(shape, False, False, checkpoint, operator_id, other_params, parent1_ptr)
+        let other_params = Vector[Int]()
+        return self.node(
+            shape, False, False, checkpoint, operator_id, other_params, parent1_ptr
+        )
 
     fn transpose(self, parent1_ptr: Pointer[Node]) raises -> Pointer[Node]:
         let operator_id = 48
@@ -1091,8 +1159,10 @@ struct Graph:
             shape.len.load() - 1,
             parent1_ptr.load().shape_ptr.load().load(shape.len.load() - 2),
         )
-        let other_params = Vector[Int]() 
-        return self.node(shape, False, False, checkpoint, operator_id, other_params, parent1_ptr)
+        let other_params = Vector[Int]()
+        return self.node(
+            shape, False, False, checkpoint, operator_id, other_params, parent1_ptr
+        )
 
     ####################################################################################
     # reduction operators
@@ -1101,8 +1171,10 @@ struct Graph:
         let operator_id = 50
         let checkpoint = False
         let shape = shape(1)
-        let other_params = Vector[Int]() 
-        return self.node(shape, False, False, checkpoint, operator_id, other_params, parent1_ptr)
+        let other_params = Vector[Int]()
+        return self.node(
+            shape, False, False, checkpoint, operator_id, other_params, parent1_ptr
+        )
 
     fn mse(
         self, parent1_ptr: Pointer[Node], parent2_ptr: Pointer[Node]
@@ -1112,7 +1184,14 @@ struct Graph:
         let shape = shape(1)
         let other_params = Vector[Int]()
         return self.node(
-            shape, False, False, checkpoint, operator_id, other_params, parent1_ptr, parent2_ptr
+            shape,
+            False,
+            False,
+            checkpoint,
+            operator_id,
+            other_params,
+            parent1_ptr,
+            parent2_ptr,
         )
 
     fn ce(
@@ -1123,12 +1202,21 @@ struct Graph:
         let shape = shape(1)
         let other_params = Vector[Int]()
         return self.node(
-            shape, False, False, checkpoint, operator_id, other_params, parent1_ptr, parent2_ptr
+            shape,
+            False,
+            False,
+            checkpoint,
+            operator_id,
+            other_params,
+            parent1_ptr,
+            parent2_ptr,
         )
 
     fn softmax(self, parent1_ptr: Pointer[Node], axis: Int) raises -> Pointer[Node]:
         let operator_id = 56
         let checkpoint = False
         let shape = parent1_ptr.load().shape_ptr.load().copy()
-        let other_params = Vector[Int]() 
-        return self.node(shape, False, False, checkpoint, operator_id, other_params, parent1_ptr)
+        let other_params = Vector[Int]()
+        return self.node(
+            shape, False, False, checkpoint, operator_id, other_params, parent1_ptr
+        )

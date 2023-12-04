@@ -35,7 +35,7 @@ struct Tensor:
         let _shape = Vector[Int]()
         for i in range(len(shape)):
             _shape.push_back(shape[i])
-        
+
         let other_params = Vector[Int]()
 
         if is_static:
@@ -489,10 +489,16 @@ struct Tensor:
         )
         return new_tensor
 
-    fn max_pool_2d(self, kernel_width: Int, kernel_height: Int, stride: Int = 1, padding: Int = 0) raises -> Tensor:
+    fn max_pool_2d(
+        self, kernel_width: Int, kernel_height: Int, stride: Int = 1, padding: Int = 0
+    ) raises -> Tensor:
         let new_tensor = self.load_tensor_for_unary_op()
         new_tensor.node_ptr.store(
-            new_tensor.graph_ptr.load().load().max_pool_2d(self.node_ptr.load(), kernel_width, kernel_height, stride, padding)
+            new_tensor.graph_ptr.load()
+            .load()
+            .max_pool_2d(
+                self.node_ptr.load(), kernel_width, kernel_height, stride, padding
+            )
         )
         return new_tensor
 
@@ -949,7 +955,13 @@ fn softmax(tensor: Tensor, axis: Int = -1) raises -> Tensor:
     return tensor.softmax(axis)
 
 
-fn max_pool_2d(tensor: Tensor, kernel_width: Int, kernel_height: Int, stride: Int = 1, padding: Int = 0) raises -> Tensor:
+fn max_pool_2d(
+    tensor: Tensor,
+    kernel_width: Int,
+    kernel_height: Int,
+    stride: Int = 1,
+    padding: Int = 0,
+) raises -> Tensor:
     return tensor.max_pool_2d(kernel_width, kernel_height, stride, padding)
 
 
