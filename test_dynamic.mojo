@@ -1,27 +1,8 @@
-# from autograd import Tensor, add, sin, relu
 from autograd import (
     Tensor,
-    cos,
     sin,
-    tan,
     relu,
     mse,
-    cross_entropy,
-    softmax,
-    tanh,
-    add,
-    sub,
-    mul,
-    div,
-    pow,
-    mmul,
-    sum,
-    log,
-    exp,
-    sqrt,
-    abs,
-    reshape,
-    transpose,
 )
 from autograd.utils.shape import shape
 
@@ -59,7 +40,7 @@ fn main() raises:
         if epoch < 100:
             x = relu(x @ W_opt + b_opt)
         x = x @ W3 + b3
-        let loss = mse(x,true_vals).forward()
+        let loss = mse(x,true_vals)
 
         # print progress
         avg_loss += loss[0]
@@ -67,7 +48,7 @@ fn main() raises:
             print("Epoch:",epoch," Avg Loss: ",avg_loss/every)
             avg_loss = 0.0
 
-        # # compute gradients and optimize
+        # compute gradients and optimize
         loss.backward()
         loss.optimize(0.01,"sgd")
 

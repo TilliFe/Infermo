@@ -35,6 +35,8 @@ struct Tensor:
         let _shape = Vector[Int]()
         for i in range(len(shape)):
             _shape.push_back(shape[i])
+        
+        let other_params = Vector[Int]()
 
         if is_static:
             let graph = Graph()
@@ -42,7 +44,7 @@ struct Tensor:
             let graph_p = Pointer[Graph].alloc(1)
             graph_p.store(graph)
             graph_ptr.store(graph_p)
-            let node_p = graph.node(_shape, True, is_single, False, -1)
+            let node_p = graph.node(_shape, True, is_single, False, -1, other_params)
             let node_ptr = Pointer[Pointer[Node]].alloc(1)
             node_ptr.store(node_p)
 
@@ -54,7 +56,7 @@ struct Tensor:
             let graph_p = Pointer[Graph].alloc(1)
             graph_p.store(graph)
             graph_ptr.store(graph_p)
-            let node_p = graph.node(_shape, False, is_single, False, -1)
+            let node_p = graph.node(_shape, False, is_single, False, -1, other_params)
             let node_ptr = Pointer[Pointer[Node]].alloc(1)
             node_ptr.store(node_p)
 
@@ -85,13 +87,14 @@ struct Tensor:
         init_graph: Bool = True,
         init_node: Bool = True,
     ) raises:
+        let other_params = Vector[Int]()
         if is_static:
             let graph = Graph()
             let graph_ptr = Pointer[Pointer[Graph]].alloc(1)
             let graph_p = Pointer[Graph].alloc(1)
             graph_p.store(graph)
             graph_ptr.store(graph_p)
-            let node_p = graph.node(shape, True, is_single, False, -1)
+            let node_p = graph.node(shape, True, is_single, False, -1, other_params)
             let node_ptr = Pointer[Pointer[Node]].alloc(1)
             node_ptr.store(node_p)
 
@@ -103,7 +106,7 @@ struct Tensor:
             let graph_p = Pointer[Graph].alloc(1)
             graph_p.store(graph)
             graph_ptr.store(graph_p)
-            let node_p = graph.node(shape, False, is_single, False, -1)
+            let node_p = graph.node(shape, False, is_single, False, -1, other_params)
             let node_ptr = Pointer[Pointer[Node]].alloc(1)
             node_ptr.store(node_p)
 
@@ -354,6 +357,8 @@ struct Tensor:
         self.graph_ptr.load().load().optimizer_step(lr, type)
 
     fn __getitem__(self, idx: Int) raises -> Float32:
+        if not self.node_ptr.load().load().computed_ptr.load():
+            _ = self.forward()
         return self.node_ptr.load().load().data.load().load(idx)
 
     fn __setitem__(self, idx: Int, val: Float32) raises:
@@ -484,6 +489,13 @@ struct Tensor:
         )
         return new_tensor
 
+    fn max_pool_2d(self, kernel_width: Int, kernel_height: Int, stride: Int = 1, padding: Int = 0) raises -> Tensor:
+        let new_tensor = self.load_tensor_for_unary_op()
+        new_tensor.node_ptr.store(
+            new_tensor.graph_ptr.load().load().max_pool_2d(self.node_ptr.load(), kernel_width, kernel_height, stride, padding)
+        )
+        return new_tensor
+
     ####################################################################################
     # binary operators
     ####################################################################################
@@ -538,6 +550,15 @@ struct Tensor:
             new_tensor.graph_ptr.load()
             .load()
             .mmul(self.node_ptr.load(), other.node_ptr.load())
+        )
+        return new_tensor
+
+    fn conv_2d(self, other: Tensor, padding: Int = 0, stride: Int = 1) raises -> Tensor:
+        let new_tensor = self.load_tensor_for_binary_op(other)
+        new_tensor.node_ptr.store(
+            new_tensor.graph_ptr.load()
+            .load()
+            .conv_2d(self.node_ptr.load(), other.node_ptr.load(), padding, stride)
         )
         return new_tensor
 
@@ -829,6 +850,10 @@ fn mmul(a: Tensor, b: Tensor) raises -> Tensor:
     return a @ b
 
 
+fn conv_2d(a: Tensor, b: Tensor, stride: Int = 1, padding: Int = 0) raises -> Tensor:
+    return a.conv_2d(b, padding, stride)
+
+
 fn sin(tensor: Tensor) raises -> Tensor:
     return tensor.sin()
 
@@ -922,6 +947,10 @@ fn cross_entropy(a: Tensor, b: Tensor) raises -> Tensor:
 
 fn softmax(tensor: Tensor, axis: Int = -1) raises -> Tensor:
     return tensor.softmax(axis)
+
+
+fn max_pool_2d(tensor: Tensor, kernel_width: Int, kernel_height: Int, stride: Int = 1, padding: Int = 0) raises -> Tensor:
+    return tensor.max_pool_2d(kernel_width, kernel_height, stride, padding)
 
 
 fn fill(tensor: Tensor, val: Float32) raises -> Tensor:

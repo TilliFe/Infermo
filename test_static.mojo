@@ -1,27 +1,8 @@
-# from autograd import Tensor, add, sin, relu
 from autograd import (
     Tensor,
-    cos,
     sin,
-    tan,
     relu,
     mse,
-    cross_entropy,
-    softmax,
-    tanh,
-    add,
-    sub,
-    mul,
-    div,
-    pow,
-    mmul,
-    sum,
-    log,
-    exp,
-    sqrt,
-    abs,
-    reshape,
-    transpose,
 )
 from autograd.utils.shape import shape
 import math

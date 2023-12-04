@@ -31,4 +31,11 @@ from .tensor import (
     relu,
     cross_entropy,
     mse,
+    conv_2d,
+    max_pool_2d,
+)
+
+from .components import (
+    Linear,
+    Conv2d
 )
