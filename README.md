@@ -6,6 +6,10 @@ Infermo is a Mojo library that provides two high-level features:
 - Tensor computation
 - Automatic Differentiation
 
+##
+- ### NOT READY FOR USE YET - UNDER CONSTRUCTION - Updates are on the way :)
+##
+
 Mojo currently operates on CPU only. GPU support will come soon! 
 
 Infermo is still a Proof-of-Concept, if you encounter any bugs, feel free to create an issue or a PR. Thank you for your contribution. 😊
