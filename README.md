@@ -1,4 +1,4 @@
-# Infermo🔥
+# Infermo🔥 -> This project has been moved to: [Endia](https://github.com/endia-org/Endia)
 
 ### Tensors and dynamic Neural Networks in pure Mojo
 
