@@ -1,14 +1,12 @@
-# Infermo🔥 -> This project has been moved to: [Endia](https://github.com/endia-org/Endia)
+# Infermo -> This project has been moved to: [Endia](https://github.com/endia-org/Endia) 🔥 
+
+### *This project only works with old versions of Mojo, we call it deprecated and remommend using [Endia](https://github.com/endia-org/Endia) instead!*
 
 ### Tensors and dynamic Neural Networks in pure Mojo
 
 Infermo is a Mojo library that provides two high-level features:
 - Tensor computation
 - Automatic Differentiation
-
-##
-- ### NOT READY FOR USE YET - UNDER CONSTRUCTION - Updates are on the way :)
-##
 
 Mojo currently operates on CPU only. GPU support will come soon! 
 
