@@ -1,6 +1,6 @@
-# Infermo -> This project has been moved to: [Endia](https://github.com/endia-org/Endia) 🔥 
+# Infermo -> This project has been moved to: [Nabla](https://github.com/nabla-ml/nabla) 🔥 
 
-### *This project only works with old versions of Mojo, we call it deprecated and remommend using [Endia](https://github.com/endia-org/Endia) instead!*
+### *This project only works with old versions of Mojo, we call it deprecated and remommend using [Nabla](https://github.com/nabla-ml/nabla) instead!*
 
 ### Tensors and dynamic Neural Networks in pure Mojo
 
